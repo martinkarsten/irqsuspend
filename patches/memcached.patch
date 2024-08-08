@@ -1,0 +1,162 @@
+diff --git a/memcached.c b/memcached.c
+index 2ec5826..736d27e 100644
+--- a/memcached.c
++++ b/memcached.c
+@@ -240,6 +240,7 @@ static void settings_init(void) {
+     settings.inter = NULL;
+     settings.maxbytes = 64 * 1024 * 1024; /* default is 64MB */
+     settings.maxconns = 1024;         /* to limit connections-related memory to about 5MB */
++    settings.busy = false;
+     settings.verbose = 0;
+     settings.oldest_live = 0;
+     settings.evict_to_free = 1;       /* push old items out of cache when memory runs out */
+@@ -4087,6 +4088,7 @@ static void usage(void) {
+            "-M, --disable-evictions   return error on memory exhausted instead of evicting\n"
+            "-c, --conn-limit=<num>    max simultaneous connections (default: %d)\n"
+            "-k, --lock-memory         lock down all paged memory\n"
++           "-y, --busy                use nonblocking event loop\n"
+            "-v, --verbose             verbose (print errors/warnings while in event loop)\n"
+            "-vv                       very verbose (also print client commands/responses)\n"
+            "-vvv                      extremely verbose (internal state transitions)\n"
+@@ -4786,6 +4788,47 @@ static int _mc_meta_load_cb(const char *tag, void *ctx, void *data) {
+     return reuse_mmap;
+ }
+ 
++#include <sys/ioctl.h>
++
++#ifndef EPOLL_IOC_TYPE
++struct epoll_params {
++    __u32 busy_poll_usecs;
++    __u16 busy_poll_budget;
++    __u8 prefer_busy_poll;
++    __u8 pad;
++};
++
++#define EPOLL_IOC_TYPE 0x8A
++#define EPIOCSPARAMS _IOW(EPOLL_IOC_TYPE, 0x01, struct epoll_params)
++#define EPIOCGPARAMS _IOR(EPOLL_IOC_TYPE, 0x02, struct epoll_params)
++#endif
++
++struct epollop {      /* defined in libevent/epoll.c */
++  void* events;
++  int nevents;
++  int epfd;
++};
++
++struct event_base {   /* defined in libevent/event-internal.h */
++  void* evsel;
++  struct epollop* evbase;
++};
++
++void epoll_set_kernelpoll(struct event_base* eb) {
++  int ret;
++  int epfd = eb->evbase->epfd;
++  struct epoll_params params = { 0, 0, 0 };
++  char* env = getenv("_MP_Usecs");
++  if (env) params.busy_poll_usecs = atoi(env);
++  env = getenv("_MP_Budget");
++  if (env) params.busy_poll_budget = atoi(env);
++  env = getenv("_MP_Prefer");
++  if (env) params.prefer_busy_poll = atoi(env);
++  ret = ioctl(epfd, EPIOCSPARAMS, &params);
++  assert(ret == 0);
++  (void)ret;
++}
++
+ int main (int argc, char **argv) {
+     int c;
+     bool lock_memory = false;
+@@ -4989,6 +5032,7 @@ int main (int argc, char **argv) {
+           "hiV" /* help, licence info, version */
+           "r"   /* maximize core file limit */
+           "v"   /* verbose */
++          "y"   /* busy loop */
+           "d"   /* daemon mode */
+           "l:"  /* interface to listen on */
+           "u:"  /* user identity to run as */
+@@ -5026,6 +5070,7 @@ int main (int argc, char **argv) {
+         {"disable-evictions", no_argument, 0, 'M'},
+         {"conn-limit", required_argument, 0, 'c'},
+         {"lock-memory", no_argument, 0, 'k'},
++        {"busy", no_argument, 0, 'y'},
+         {"help", no_argument, 0, 'h'},
+         {"license", no_argument, 0, 'i'},
+         {"version", no_argument, 0, 'V'},
+@@ -5112,6 +5157,9 @@ int main (int argc, char **argv) {
+                 return 1;
+             }
+             break;
++        case 'y':
++            settings.busy = true;
++            break;
+         case 'h':
+             usage();
+             exit(EXIT_SUCCESS);
+@@ -6015,6 +6063,7 @@ int main (int argc, char **argv) {
+     ev_config = event_config_new();
+     event_config_set_flag(ev_config, EVENT_BASE_FLAG_NOLOCK);
+     main_base = event_base_new_with_config(ev_config);
++    epoll_set_kernelpoll(main_base);
+     event_config_free(ev_config);
+ #else
+     /* Otherwise, use older API */
+diff --git a/memcached.h b/memcached.h
+index 45ca2f3..d592509 100644
+--- a/memcached.h
++++ b/memcached.h
+@@ -471,6 +471,7 @@ struct settings {
+     int detail_enabled;     /* nonzero if we're collecting detailed stats */
+     int reqs_per_event;     /* Maximum number of io to process on each
+                                io-event. */
++    bool busy;
+     bool use_cas;
+     enum protocol binding_protocol;
+     int backlog;
+@@ -1075,6 +1076,8 @@ void stats_reset(void);
+ void process_stat_settings(ADD_STAT add_stats, void *c);
+ void process_stats_conns(ADD_STAT add_stats, void *c);
+ 
++void epoll_set_kernelpoll(struct event_base*);
++
+ #if HAVE_DROP_PRIVILEGES
+ extern void setup_privilege_violations_handler(void);
+ extern void drop_privileges(void);
+diff --git a/proxy_network.c b/proxy_network.c
+index 3bfbc2f..ba60e52 100644
+--- a/proxy_network.c
++++ b/proxy_network.c
+@@ -1496,6 +1496,7 @@ void proxy_init_event_thread(proxy_event_thread_t *t, proxy_ctx_t *ctx, struct e
+         ev_config = event_config_new();
+         event_config_set_flag(ev_config, EVENT_BASE_FLAG_NOLOCK);
+         t->base = event_base_new_with_config(ev_config);
++        epoll_set_kernelpoll(t->base);
+         event_config_free(ev_config);
+         if (! t->base) {
+             fprintf(stderr, "Can't allocate event base\n");
+diff --git a/thread.c b/thread.c
+index 3cd0917..0120d52 100644
+--- a/thread.c
++++ b/thread.c
+@@ -427,6 +427,7 @@ static void setup_thread(LIBEVENT_THREAD *me) {
+     ev_config = event_config_new();
+     event_config_set_flag(ev_config, EVENT_BASE_FLAG_NOLOCK);
+     me->base = event_base_new_with_config(ev_config);
++    epoll_set_kernelpoll(me->base);
+     event_config_free(ev_config);
+ #else
+     me->base = event_init();
+@@ -533,7 +534,13 @@ static void *worker_libevent(void *arg) {
+         }
+     }
+ #else
+-    event_base_loop(me->base, 0);
++    if (settings.busy) {
++        while (!event_base_got_exit(me->base)) {
++            event_base_loop(me->base, EVLOOP_ONCE | EVLOOP_NONBLOCK);
++        }
++    } else {
++        event_base_loop(me->base, 0);
++    }
+ #endif
+     // same mechanism used to watch for all threads exiting.
+     register_thread_initialized();

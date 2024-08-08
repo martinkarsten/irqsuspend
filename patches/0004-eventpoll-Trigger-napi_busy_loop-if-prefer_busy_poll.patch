@@ -1,0 +1,28 @@
+From 27729de7f307df40ef45fd1b4df0cf8176881123 Mon Sep 17 00:00:00 2001
+From: Martin Karsten <mkarsten@uwaterloo.ca>
+Date: Wed, 7 Aug 2024 17:41:56 -0400
+Subject: [PATCH 4/5] eventpoll: Trigger napi_busy_loop, if prefer_busy_poll is
+ set
+
+Setting prefer_busy_poll now leads to an effectively nonblocking iteration
+though napi_busy_loop, even when busy_poll_usecs is 0.
+---
+ fs/eventpoll.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/fs/eventpoll.c b/fs/eventpoll.c
+index 6d0e2f547ae7..f88ed4296a0c 100644
+--- a/fs/eventpoll.c
++++ b/fs/eventpoll.c
+@@ -420,7 +420,7 @@ static bool busy_loop_ep_timeout(unsigned long start_time,
+ 
+ static bool ep_busy_loop_on(struct eventpoll *ep)
+ {
+-	return !!READ_ONCE(ep->busy_poll_usecs) || net_busy_loop_on();
++	return !!READ_ONCE(ep->busy_poll_usecs) || READ_ONCE(ep->prefer_busy_poll) || net_busy_loop_on();
+ }
+ 
+ static bool ep_busy_loop_end(void *p, unsigned long start_time)
+-- 
+2.34.1
+

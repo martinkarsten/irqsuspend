@@ -1,0 +1,12 @@
+# this assumes that patch files are available in the home directory
+patchdir=$HOME
+git clone --depth 1 --branch 1.6.29 https://github.com/memcached/memcached.git
+cd memcached
+./autogen.sh
+patch -p1 < $patchdir/memcached.patch
+git clone --depth 1 --branch release-2.1.12-stable https://github.com/libevent/libevent.git
+patch -d libevent -p1 < $patchdir/libevent.patch
+cmake -S libevent -B libevent -DCMAKE_INSTALL_PREFIX=. -DEVENT__LIBRARY_TYPE=SHARED
+cmake --build libevent
+./configure --with-libevent=$(pwd)/libevent
+make -j $(nproc)

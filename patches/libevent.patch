@@ -1,0 +1,14 @@
+diff --git a/event.c b/event.c
+index 7a42b73..a13844e 100644
+--- a/event.c
++++ b/event.c
+@@ -1974,7 +1974,8 @@ event_base_loop(struct event_base *base, int flags)
+ 			 * if we have active events, we just poll new events
+ 			 * without waiting.
+ 			 */
+-			evutil_timerclear(&tv);
++			tv.tv_sec = 0;
++			tv.tv_usec = 1000;
+ 		}
+ 
+ 		/* If we have no events, we just exit */
