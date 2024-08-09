@@ -100,7 +100,9 @@ MUTARGS="-s $SERVER_IP -K fb_key -V fb_value -i fb_ia -r 1000000"
 MUTILATE+=" -T $MUTCORES"
 
 # build kernel, if requested
-$BUILD && $(dirname $0)/build.sh full $SERVER || {
+$BUILD && {
+	$(dirname $0)/build.sh full $SERVER || exit 1
+} || {
 	echo "waiting for server"
 	until ssh -t -oPasswordAuthentication=no $SERVER ./setup.sh 2>/dev/null; do sleep 3; done
 }
@@ -137,7 +139,6 @@ for tc in $TESTCASES; do
 		defer50)    POLLVAR="   50000 100        0"; MEMVAR="";;
 		defer200)   POLLVAR="  200000 100        0"; MEMVAR="";;
 		defer2000)  POLLVAR=" 2000000 100        0"; MEMVAR="";;
-		suspend1)   POLLVAR="    1000 100 20000000"; MEMVAR="_MP_Usecs=0  _MP_Budget=64 _MP_Prefer=1";;
 		suspend10)  POLLVAR="   10000 100 20000000"; MEMVAR="_MP_Usecs=0  _MP_Budget=64 _MP_Prefer=1";;
 		suspend20)  POLLVAR="   20000 100 20000000"; MEMVAR="_MP_Usecs=0  _MP_Budget=64 _MP_Prefer=1";;
 		suspend50)  POLLVAR="   50000 100 20000000"; MEMVAR="_MP_Usecs=0  _MP_Budget=64 _MP_Prefer=1";;
