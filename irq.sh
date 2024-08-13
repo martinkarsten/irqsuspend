@@ -15,8 +15,8 @@ function DEBUG() {
 function usage() {
 	echo usage:
 	echo "$(basename $0) <interface> count [raw]"
-	echo "$(basename $0) <interface> setirq all <cpu spec>"
-	echo "$(basename $0) <interface> setirq linear <low cpu> <high cpu>"
+	echo "$(basename $0) <interface> setirq1 <cpuset> <irq idx> <irq cnt>"
+	echo "$(basename $0) <interface> setirqN <cpuset> <irq idx> <irq cnt>"
 	echo "$(basename $0) <interface> setcoalesce <adaptive-rx> <adaptive-tx> <rx-usecs> <rx-frames> <rx-usecs-irq> <rx-frames-irq> <tx-usecs> <tx-frames> <tx-usecs-irq> <tx-frames-irq> <cqe-mode-rx> <cqe-mode-tx?"
 	echo "$(basename $0) <interface> setpoll <gro timeout> <defer irqs> <suspend timeout>"
 	echo "$(basename $0) <interface> show"
@@ -88,44 +88,52 @@ while [ $# -gt 0 ]; do
 	count)
 		count=true; shift
 		[ "$1" = "raw" ] && { raw=true; shift; };;
-	setirq)
+	setq)
 		[ $# -lt 2 ] && usage
-		case "$2" in
-		all)
-			[ $# -lt 3 ] && usage
-			for ((idx=0;idx<$irqtotal;idx++)); do
-				[ -r /proc/irq/${irqlist[idx]}/smp_affinity_list ] || continue;
-			  sudo sh -c "echo $3 > /proc/irq/${irqlist[idx]}/smp_affinity_list"
+		case $driver in
+		mlx5_core)
+			sudo ethtool -L $dev combined $2;;
+		mlx4_en)
+			sudo ethtool -L $dev rx $2 tx $2;;
+		*)
+			error channel settings: unsupported $driver;;
+		esac
+		shift 2;;
+	setirq1)
+		[ $# -lt 4 ] && usage
+		[ $4 -gt 0 ] && max=$(($3 + $4)) || max=$irqtotal
+		idx=$3
+		while [ $idx -lt $max ]; do
+			for range in $(echo $2|tr , ' '); do
+				low=$(echo $range|cut -f1 -d-)
+			  high=$(echo $range|cut -f2 -d-)
+				for ((cpu=$low;cpu<=$high;cpu++)); do
+					# route each irq to a dedicated core (linear assignment)
+					[ $rxmap ] && sudo sh -c "echo $cpu > /proc/irq/${irqlist[${rxmap[idx]}]}/smp_affinity_list"
+					[ $txmap ] && sudo sh -c "echo $cpu > /proc/irq/${irqlist[${txmap[idx]}]}/smp_affinity_list"
+					[ $cbmap ] && sudo sh -c "echo $cpu > /proc/irq/${irqlist[${cbmap[idx]}]}/smp_affinity_list"
+					# clear RPS, set XPS to dedicated core
+					sudo sh -c "echo 0 > /sys/class/net/$dev/queues/rx-$idx/rps_cpus"
+					sudo sh -c "echo 0 > /sys/class/net/$dev/queues/rx-$idx/rps_flow_cnt"
+					sudo sh -c "echo 0 > /sys/class/net/$dev/queues/tx-$idx/xps_rxqs"
+					str=$(printf '%X' $((2 ** $(($cpu % 32)))))
+					for ((tmp=$cpu;tmp>=32;tmp-=32)); do str+=",00000000"; done
+					sudo sh -c "echo $str > /sys/class/net/$dev/queues/tx-$idx/xps_cpus"
+					((idx+=1))
+					[ $idx -ge $max ] && break
+				done
+				[ $idx -ge $max ] && break
 			done
-			shift 3;;
-		linear)
-			[ $# -lt 4 ] && usage
-			cnt=$((1 + $4 - $3))
-			case $driver in
-			mlx5_core)
-				sudo ethtool -L $dev combined $cnt;;
-			mlx4_en)
-				sudo ethtool -L $dev rx $cnt tx $cnt;;
-			*)
-				error channel settings: unsupported $driver;;
-			esac
-			for ((idx=0;idx<$cnt;idx++)); do
-				cpu=$(($3 + $idx))
-				# route each irq to a dedicated core (linear assignment)
-				[ $rxmap ] && sudo sh -c "echo $cpu > /proc/irq/${irqlist[${rxmap[idx]}]}/smp_affinity_list"
-				[ $txmap ] && sudo sh -c "echo $cpu > /proc/irq/${irqlist[${txmap[idx]}]}/smp_affinity_list"
-				[ $cbmap ] && sudo sh -c "echo $cpu > /proc/irq/${irqlist[${cbmap[idx]}]}/smp_affinity_list"
-				# clear RPS, set XPS to dedicated core
-				sudo sh -c "echo 0 > /sys/class/net/$dev/queues/rx-$idx/rps_cpus"
-				sudo sh -c "echo 0 > /sys/class/net/$dev/queues/rx-$idx/rps_flow_cnt"
-				sudo sh -c "echo 0 > /sys/class/net/$dev/queues/tx-$idx/xps_rxqs"
-				str=$(printf '%X' $((2 ** $(($cpu % 32)))))
-				for ((;cpu>=32;cpu-=32)); do str+=",00000000"; done
-				sudo sh -c "echo $str > /sys/class/net/$dev/queues/tx-$idx/xps_cpus"
-			done
-			shift 4;;
-		*) error unknown IRQ scheme: $2;;
-		esac;;
+		done
+		shift 4;;
+	setirqN)
+		[ $# -lt 4 ] && usage
+		[ $4 -gt 0 ] && max=$(($3 + $4)) || max=$irqtotal
+		for ((idx=$3;idx<$max;idx++)); do
+			[ -r /proc/irq/${irqlist[idx]}/smp_affinity_list ] || continue;
+		  sudo sh -c "echo $2 > /proc/irq/${irqlist[idx]}/smp_affinity_list"
+		done
+		shift 4;;
 	setcoalesce)
 		[ $# -lt 13 ] && usage; shift
 		COALESCING=""

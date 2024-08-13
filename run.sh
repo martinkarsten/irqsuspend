@@ -1,7 +1,9 @@
 #!/bin/bash
 
 function error() {
-  echo $*
+	echo
+  echo ERROR: $*
+  echo
   exit 1
 }
 
@@ -9,7 +11,10 @@ function usage() {
   echo "$(basename $0) [cp] [options] <server> [<# runs> | clean]"
   echo "Options:"
   echo "-b                 build kernel first"
+  echo "-c num             server cpus"
   echo "-f                 create flamegraph"
+  echo "-h                 hyperthread mode"
+  echo "-n num             connections per mutilate thread"
   echo "-q qps1,qps2,...   load rates"
   echo "-t test1,test2,... test cases"
   exit 0
@@ -35,15 +40,21 @@ function show_testcases() {
 }
 
 # command-line options: runs, qps, test cases
-BUILD=false
-FLAMEGRAPH=false
-unset REQUESTED_QPS
+opt_build=false
+unset arg_cores
+opt_flamegraph=false
+opt_ht=false
+unset arg_conns
+unset arg_qps
 TESTCASES=$(show_testcases)
-while getopts "bfq:t:" option; do
+while getopts "bc:fhn:q:t:" option; do
 case $option in
-	b) BUILD=true;;
-	f) FLAMEGRAPH=true;;
-	q) REQUESTED_QPS=$(echo ${OPTARG}|tr , ' ');;
+	b) opt_build=true;;
+	c) arg_cores=${OPTARG};;
+	f) opt_flamegraph=true;;
+	h) opt_ht=true;;
+	n) arg_conns=${OPTARG};;
+	q) arg_qps=$(echo ${OPTARG}|tr , ' ');;
 	t) TESTCASES=$(echo ${OPTARG}|tr , ' ');;
 	*) usage;;
 esac; done
@@ -60,18 +71,24 @@ esac
 [ -f $hostfile ] && source $hostfile || error cannot find $hostfile
 shift
 
-[ $REQUESTED_QPS ] && QPS=$REQUESTED_QPS || QPS="0 $QPS"
+# process options and arguments
+$opt_ht && [ $HTBASE -eq 0 ] && error no hyperthreading on $SERVER
+
+[[ $arg_qps ]] && QPS=$arg_qps || QPS="0 $QPS"
+
+[[ $arg_cores ]] && [ $arg_cores -le $MAXCORES ] && CORES=$arg_cores || CORES=$MAXCORES
+
+[[ $arg_conns ]] && CONNS=$arg_conns || CONNS=20
 
 [ $# -gt 0 ] && { RUNS=$1; shift; } || RUNS=1
 
 [ $# -gt 0 ] && usage
 
-echo "server: $SERVER"
-echo "driver: $DRIVER"
-echo "clients: $CLIENTS"
+# print summary
+echo "server: $SERVER; driver: $DRIVER; clients: $CLIENTS"
 echo "tests: $TESTCASES"
-echo "rates: $QPS"
-echo "runs: $RUNS"
+echo "runs: $RUNS; rates: $QPS"
+echo "cores: $CORES; ht: $opt_ht; conns: $CONNS"
 
 [ "$RUNS" = "show" ] && exit 0
 
@@ -100,7 +117,7 @@ MUTARGS="-s $SERVER_IP -K fb_key -V fb_value -i fb_ia -r 1000000"
 MUTILATE+=" -T $MUTCORES"
 
 # build kernel, if requested
-$BUILD && {
+$opt_build && {
 	$(dirname $0)/build.sh full $SERVER || exit 1
 } || {
 	echo "waiting for server"
@@ -120,33 +137,62 @@ trap "exit 1" SIGHUP SIGINT SIGQUIT SIGTERM
 [ "$RUNS" = "clean" ] && exit 0 # exit trap cleans up
 echo "cleaning up"; cleanup
 
-# loop over runs and test cases (could loop over cpus and conns as well)
-conns=20; cpus=$MAXCORES; topcpu=$(expr $BASECORE + $cpus - 1);
+# loop over test cases
 for ((run=0;run<$RUNS;run++)); do
 [ -f runs ] && [ $(cat runs) -lt $run ] && exit 0
 for qps in $QPS; do
 for tc in $TESTCASES; do
 	file=$qps-$tc-$run; echo && echo -n "***** PREPARING $file "
 	[ -f mutilate-$file.out ] && { echo "already done"; continue; }
-	MEMSPEC="-t $cpus -N $cpus -b 16384 -c 32768 -m 10240 -o hashpower=24,no_lru_maintainer,no_lru_crawler"
-	MUTSPEC="-c $conns -q $qps -d 1 -u 0.03"
+	conns=$CONNS; cpus=$CORES
 	case "$tc" in # testcases start
-		base)       POLLVAR="       0   0        0"; MEMVAR="";;
-		busy)       POLLVAR="  200000 100        0"; MEMVAR="_MP_Usecs=64   _MP_Budget=64 _MP_Prefer=1";;
-		fullbusy)   POLLVAR=" 5000000 100        0"; MEMVAR="_MP_Usecs=1000 _MP_Budget=64 _MP_Prefer=1"; MEMSPEC+=" -y";;
-		defer10)    POLLVAR="   10000 100        0"; MEMVAR="";;
-		defer20)    POLLVAR="   20000 100        0"; MEMVAR="";;
-		defer50)    POLLVAR="   50000 100        0"; MEMVAR="";;
-		defer200)   POLLVAR="  200000 100        0"; MEMVAR="";;
-		defer2000)  POLLVAR=" 2000000 100        0"; MEMVAR="";;
-		suspend10)  POLLVAR="   10000 100 20000000"; MEMVAR="_MP_Usecs=0  _MP_Budget=64 _MP_Prefer=1";;
-		suspend20)  POLLVAR="   20000 100 20000000"; MEMVAR="_MP_Usecs=0  _MP_Budget=64 _MP_Prefer=1";;
-		suspend50)  POLLVAR="   50000 100 20000000"; MEMVAR="_MP_Usecs=0  _MP_Budget=64 _MP_Prefer=1";;
-		suspend200) POLLVAR="  200000 100 20000000"; MEMVAR="_MP_Usecs=0  _MP_Budget=64 _MP_Prefer=1";;
+		base)       HTSPLIT=true;  POLLVAR="       0   0        0"; MEMVAR="";;
+		busy)       HTSPLIT=false; POLLVAR="  200000 100        0"; MEMVAR="_MP_Usecs=64   _MP_Budget=64 _MP_Prefer=1";;
+		fullbusy)   HTSPLIT=false; POLLVAR=" 5000000 100        0"; MEMVAR="_MP_Usecs=1000 _MP_Budget=64 _MP_Prefer=1"; MEMSPEC+=" -y";;
+		defer10)    HTSPLIT=true;  POLLVAR="   10000 100        0"; MEMVAR="";;
+		defer20)    HTSPLIT=true;  POLLVAR="   20000 100        0"; MEMVAR="";;
+		defer50)    HTSPLIT=true;  POLLVAR="   50000 100        0"; MEMVAR="";;
+		defer200)   HTSPLIT=true;  POLLVAR="  200000 100        0"; MEMVAR="";;
+		defer2000)  HTSPLIT=true;  POLLVAR=" 2000000 100        0"; MEMVAR="";;
+		suspend10)  HTSPLIT=false; POLLVAR="   10000 100 20000000"; MEMVAR="_MP_Usecs=0  _MP_Budget=64 _MP_Prefer=1";;
+		suspend20)  HTSPLIT=false; POLLVAR="   20000 100 20000000"; MEMVAR="_MP_Usecs=0  _MP_Budget=64 _MP_Prefer=1";;
+		suspend50)  HTSPLIT=false; POLLVAR="   50000 100 20000000"; MEMVAR="_MP_Usecs=0  _MP_Budget=64 _MP_Prefer=1";;
+		suspend200) HTSPLIT=false; POLLVAR="  200000 100 20000000"; MEMVAR="_MP_Usecs=0  _MP_Budget=64 _MP_Prefer=1";;
 		*) echo UNKNOWN TEST CASE $tc; continue;;
 	esac          # testcases end
-	ssh $SERVER ./irq.sh $IFACE setirq all $OTHER setirq linear $BASECORE $topcpu setpoll $POLLVAR show > setup-$file.out
-	ssh -f $SERVER "$MEMVAR taskset -c $BASECORE-$topcpu $MEMCACHED $MEMSPEC"
+	$opt_ht && {
+		base1=$BASECORE
+		base2=$(($BASECORE + $HTBASE))
+		top1=$(($base1 + $cpus / 2 - 1))
+		top2=$(($base2 + $cpus / 2 - 1))
+		$HTSPLIT && {
+			((cpus/=2))
+			runcpuset=$base1-$top1
+			irqcpuset=$base2-$top2
+			allcpuset=$runcpuset,$irqcpuset
+			observer=$cpus
+			irqs=$cpus
+		} || {
+			runcpuset=$base1-$top1,$base2-$top2
+			irqcpuset=$runcpuset
+			allcpuset=$runcpuset
+			observer=$(($cpus / 2))
+			irqs=$cpus
+		}
+	} || {
+		base=$BASECORE
+		top=$(($base + $cpus - 1));
+		runcpuset=$base-$top
+		irqcpuset=$runcpuset
+		allcpuset=$runcpuset
+		observer=$cpus
+		irqs=$cpus
+	}
+	MEMSPEC="-t $cpus -N $cpus -b 16384 -c 32768 -m 10240 -o hashpower=24,no_lru_maintainer,no_lru_crawler"
+	MUTSPEC="-c $conns -q $qps -d 1 -u 0.03"
+	ssh $SERVER ./irq.sh $IFACE setq $irqs setirqN $OTHER 0 0 setirq1 $irqcpuset 0 $irqs setpoll $POLLVAR show > setup-$file.out
+	echo "$MEMVAR taskset -c $runcpuset $MEMCACHED $MEMSPEC" > memcached-$file.out
+	ssh -f $SERVER "$MEMVAR taskset -c $runcpuset $MEMCACHED $MEMSPEC"
 	(pdsh -w $CLIENTS $MUTILATE -A 2>/dev/null &); sleep 1
 	echo -n "LOAD "; timeout 30s ssh $DRIVER $MUTILATE $MUTARGS --loadonly
 	echo -n "WARM "; timeout 30s ssh $DRIVER $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t 10 >/dev/null 2>&1 # warmup
@@ -154,21 +200,22 @@ for tc in $TESTCASES; do
 #	ssh -f $SERVER 'sudo bpftrace -e "tracepoint:napi:napi_debug { @[args->op,args->napi_id,args->cpu,args->data] = count(); }"' > napi-$file.out
 	pdsh -w $DRIVER,$CLIENTS ./tcp.sh >/dev/null
 	ssh $SERVER sudo sh -c "'echo hist:key=common_pid.execname,ret > /sys/kernel/debug/tracing/events/syscalls/sys_exit_epoll_wait/trigger'"
-	ssh -f $SERVER "sleep 12; taskset -c $cpus sar -P $BASECORE-$topcpu -u ALL 1 10" > sar-$file.out
-	$FLAMEGRAPH && {
-		ssh -f $SERVER "sleep 12; taskset -c $cpus $PERF record -C $BASECORE-$topcpu -F 99 -g -o perf.data -- sleep 10 >/dev/null"
+	ssh -f $SERVER "sleep 12; taskset -c $observer sar -P $allcpuset -u ALL 1 10" > sar-$file.out
+	$opt_flamegraph && {
+		ssh -f $SERVER "sleep 12; taskset -c $observer $PERF record -C $allcpuset -F 99 -g -o perf.data -- sleep 10 >/dev/null"
 	} || {
-		ssh -f $SERVER "sleep 12; taskset -c $cpus $PERF stat -C $BASECORE-$topcpu -e cycles,instructions --no-big-num -- sleep 10 2>&1" > perf-$file.out
+		ssh -f $SERVER "sleep 12; taskset -c $observer $PERF stat -C $allcpuset -e cycles,instructions --no-big-num -- sleep 10 2>&1" > perf-$file.out
 	}
 	ssh $SERVER ./irq.sh $IFACE count > /dev/null
-	echo "RUN "; timeout 60s ssh $DRIVER $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t 30 | tee mutilate-$file.out # experiment
+	printf "$MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t 30\n\n" > mutilate-$file.out
+	echo "RUN "; timeout 60s ssh $DRIVER $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t 30 | tee -a mutilate-$file.out # experiment
 	ssh $SERVER ./irq.sh $IFACE count | tee irq-$file.out
 	ssh $SERVER cat /sys/kernel/debug/tracing/events/syscalls/sys_exit_epoll_wait/hist|grep -F mc-worker > epoll-$file.out
 	ssh $SERVER sudo sh -c "'echo \!hist:key=common_pid.execname,ret > /sys/kernel/debug/tracing/events/syscalls/sys_exit_epoll_wait/trigger'"
 	pdsh -w $DRIVER,$CLIENTS ./tcp.sh | tee tcp-$file.out
 	ssh $SERVER "(echo stats;sleep 1)|telnet localhost 11211" > stats-$file.out
 	killproc; kill -9 $(jobs -p) 2>/dev/null
-	$FLAMEGRAPH && {
+	$opt_flamegraph && {
 		# need ssh -t here, otherwise 'perf script' assumes that stdin is a file and won't run
 		ssh -t $SERVER "$PERF script >out.perf && $FGDIR/stackcollapse-perf.pl out.perf >out.folded && $FGDIR/flamegraph.pl out.folded >flamegraph.svg"
 		scp $SERVER:flamegraph.svg flamegraph-$file.svg && ssh $SERVER "rm -f perf.data out.perf out.folded flamegraph.svg"
