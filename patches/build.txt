@@ -1,4 +1,6 @@
-# this assumes that patch files are available in the home directory
+# this assumes that patch files are available in the user's home directory
+
+# build modified libevent and memcached
 patchdir=$HOME
 git clone --depth 1 --branch 1.6.29 https://github.com/memcached/memcached.git
 cd memcached
@@ -10,3 +12,11 @@ cmake -S libevent -B libevent -DCMAKE_INSTALL_PREFIX=. -DEVENT__LIBRARY_TYPE=SHA
 cmake --build libevent
 ./configure --with-libevent=$(pwd)/libevent
 make -j $(nproc)
+
+# build mutilate
+sudo apt install gengetopt libzmq-dev scons
+git clone --depth 1 https://github.com/leverich/mutilate
+cd mutilate
+patch -p1 < $patchdir/mutilate.patch
+rm -rf .sconsign.dblite .sconf_temp
+scons --config=force

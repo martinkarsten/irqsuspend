@@ -1,0 +1,306 @@
+commit 7dd802143a58bb54855a186079522793fa1fcbc9
+Author: Martin Karsten <mkarsten@uwaterloo.ca>
+Date:   Mon Jun 28 18:54:32 2021 -0400
+
+    - local patch
+
+diff --git a/Connection.cc b/Connection.cc
+index ea02899..efbc59a 100644
+--- a/Connection.cc
++++ b/Connection.cc
+@@ -1,3 +1,5 @@
++#include <arpa/inet.h>
++#include <netinet/in.h>
+ #include <netinet/tcp.h>
+ 
+ #include <event2/buffer.h>
+diff --git a/ConnectionStats.h b/ConnectionStats.h
+index e957c19..01b2d92 100644
+--- a/ConnectionStats.h
++++ b/ConnectionStats.h
+@@ -26,7 +26,7 @@ class ConnectionStats {
+ #elif defined(USE_HISTOGRAM_SAMPLER)
+    get_sampler(10000,1), set_sampler(10000,1), op_sampler(1000,1),
+ #else
+-   get_sampler(200), set_sampler(200), op_sampler(100),
++   get_sampler(200), set_sampler(200), op_sampler(100), rx_sampler(200),
+ #endif
+    rx_bytes(0), tx_bytes(0), gets(0), sets(0),
+    get_misses(0), skips(0), sampling(_sampling) {}
+@@ -43,6 +43,7 @@ class ConnectionStats {
+   LogHistogramSampler get_sampler;
+   LogHistogramSampler set_sampler;
+   LogHistogramSampler op_sampler;
++  LogHistogramSampler rx_sampler;
+ #endif
+ 
+   uint64_t rx_bytes, tx_bytes;
+@@ -88,7 +89,7 @@ class ConnectionStats {
+   }
+ #endif
+ 
+-  void accumulate(const ConnectionStats &cs) {
++  void accumulate(const ConnectionStats &cs, int aggregate) {
+ #ifdef USE_ADAPTIVE_SAMPLER
+     for (auto i: cs.get_sampler.samples) get_sampler.sample(i); //log_get(i);
+     for (auto i: cs.set_sampler.samples) set_sampler.sample(i); //log_set(i);
+@@ -97,6 +98,11 @@ class ConnectionStats {
+     get_sampler.accumulate(cs.get_sampler);
+     set_sampler.accumulate(cs.set_sampler);
+     op_sampler.accumulate(cs.op_sampler);
++    if (aggregate) {
++      rx_sampler.accumulate(cs.rx_sampler);
++    } else {
++      rx_sampler.sample(cs.rx_bytes);
++    }
+ #endif
+ 
+     rx_bytes += cs.rx_bytes;
+@@ -123,9 +129,9 @@ class ConnectionStats {
+   }
+ 
+   static void print_header() {
+-    printf("%-7s %7s %7s %7s %7s %7s %7s %7s %7s\n",
++    printf("%-7s %7s %7s %7s %7s %7s %7s %7s %7s %7s\n",
+            "#type", "avg", "std", "min", /*"1st",*/ "5th", "10th",
+-           "90th", "95th", "99th");
++           "50th", "90th", "95th", "99th");
+   }
+ 
+ #ifdef USE_ADAPTIVE_SAMPLER
+@@ -137,18 +143,19 @@ class ConnectionStats {
+     size_t l = copy.size();
+ 
+     if (l == 0) {
+-      printf("%-7s %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f",
+-             tag, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
++      printf("%-7s %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f",
++             tag, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+       if (newline) printf("\n");
+       return;
+     }
+ 
+     sort(copy.begin(), copy.end());
+ 
+-    printf("%-7s %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f",
++    // 1st percentile printed instead of stddev?
++    printf("%-7s %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f",
+            tag, std::accumulate(copy.begin(), copy.end(), 0.0) / l,
+-           copy[0], copy[(l*1) / 100], copy[(l*5) / 100], copy[(l*10) / 100],
+-           copy[(l*90) / 100], copy[(l*95) / 100], copy[(l*99) / 100]
++           copy[(l*1) / 100], copy[0], copy[(l*5) / 100], copy[(l*10) / 100],
++           copy[(l*50) / 100], copy[(l*90) / 100], copy[(l*95) / 100], copy[(l*99) / 100]
+            );
+     if (newline) printf("\n");
+   }
+@@ -164,10 +171,11 @@ class ConnectionStats {
+ 
+     sort(copy.begin(), copy.end());
+ 
+-    printf("%-7s %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f",
++    // 1st percentile printed instead of stddev?
++    printf("%-7s %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f",
+            tag, std::accumulate(copy.begin(), copy.end(), 0.0) / l,
+-           copy[0], copy[(l*1) / 100], copy[(l*5) / 100], copy[(l*10) / 100],
+-           copy[(l*90) / 100], copy[(l*95) / 100], copy[(l*99) / 100]
++           copy[(l*1) / 100], copy[0], copy[(l*5) / 100], copy[(l*10) / 100],
++           copy[(l*50) / 100], copy[(l*90) / 100], copy[(l*95) / 100], copy[(l*99) / 100]
+            );
+     if (newline) printf("\n");
+   }
+@@ -175,16 +183,16 @@ class ConnectionStats {
+   void print_stats(const char *tag, HistogramSampler &sampler,
+                    bool newline = true) {
+     if (sampler.total() == 0) {
+-      printf("%-7s %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f",
+-             tag, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
++      printf("%-7s %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f",
++             tag, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+       if (newline) printf("\n");
+       return;
+     }
+ 
+-    printf("%-7s %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f",
+-           tag, sampler.average(),
+-           sampler.get_nth(0), sampler.get_nth(1), sampler.get_nth(5),
+-           sampler.get_nth(10), sampler.get_nth(90),
++    printf("%-7s %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f",
++           tag, sampler.average(), sampler.stddev(),
++           sampler.minimum(), sampler.get_nth(5),
++           sampler.get_nth(10), sampler.get_nth(50), sampler.get_nth(90),
+            sampler.get_nth(95), sampler.get_nth(99));
+ 
+     if (newline) printf("\n");
+@@ -193,16 +201,16 @@ class ConnectionStats {
+   void print_stats(const char *tag, LogHistogramSampler &sampler,
+                    bool newline = true) {
+     if (sampler.total() == 0) {
+-      printf("%-7s %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f",
+-             tag, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
++      printf("%-7s %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f",
++             tag, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+       if (newline) printf("\n");
+       return;
+     }
+ 
+-    printf("%-7s %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f",
++    printf("%-7s %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f",
+            tag, sampler.average(), sampler.stddev(),
+-           sampler.get_nth(0), /*sampler.get_nth(1),*/ sampler.get_nth(5),
+-           sampler.get_nth(10), sampler.get_nth(90),
++           sampler.minimum(), /*sampler.get_nth(1),*/ sampler.get_nth(5),
++           sampler.get_nth(10), sampler.get_nth(50), sampler.get_nth(90),
+            sampler.get_nth(95), sampler.get_nth(99));
+ 
+     if (newline) printf("\n");
+diff --git a/Protocol.cc b/Protocol.cc
+index 6d346b8..64815a2 100644
+--- a/Protocol.cc
++++ b/Protocol.cc
+@@ -1,3 +1,4 @@
++#include <arpa/inet.h>
+ #include <netinet/tcp.h>
+ 
+ #include <event2/buffer.h>
+diff --git a/SConstruct b/SConstruct
+index 57d0054..05d3aa0 100644
+--- a/SConstruct
++++ b/SConstruct
+@@ -16,19 +16,19 @@ if sys.platform == 'darwin':
+ conf = env.Configure(config_h = "config.h")
+ conf.Define("__STDC_FORMAT_MACROS")
+ if not conf.CheckCXX():
+-    print "A compiler with C++11 support is required."
++    print("A compiler with C++11 support is required.")
+     Exit(1)
+-print "Checking for gengetopt...",
++print("Checking for gengetopt..."),
+ if env.Execute("@which gengetopt &> /dev/null"):
+-    print "not found (required)"
++    print("not found (required)")
+     Exit(1)
+-else: print "found"
++else: print("found")
+ if not conf.CheckLibWithHeader("event", "event2/event.h", "C++"):
+-    print "libevent required"
++    print("libevent required")
+     Exit(1)
+ conf.CheckDeclaration("EVENT_BASE_FLAG_PRECISE_TIMER", '#include <event2/event.h>', "C++")
+ if not conf.CheckLibWithHeader("pthread", "pthread.h", "C++"):
+-    print "pthread required"
++    print("pthread required")
+     Exit(1)
+ conf.CheckLib("rt", "clock_gettime", language="C++")
+ conf.CheckLibWithHeader("zmq", "zmq.hpp", "C++")
+diff --git a/cmdline.ggo b/cmdline.ggo
+index 331dd21..16143f7 100644
+--- a/cmdline.ggo
++++ b/cmdline.ggo
+@@ -66,6 +66,7 @@ text "\nAgent-mode options:"
+ option "agentmode" A "Run client in agent mode."
+ option "agent" a "Enlist remote agent." string typestr="host" multiple
+ option "agent_port" p "Agent port." string default="5556"
++option "special" X "Special argument."
+ option "lambda_mul" l "Lambda multiplier.  Increases share of \
+ QPS for this client." int default="1"
+ option "measure_connections" C "Master client connections per server, \
+diff --git a/mutilate.cc b/mutilate.cc
+index 426fd05..212f4ea 100644
+--- a/mutilate.cc
++++ b/mutilate.cc
+@@ -1,4 +1,5 @@
+ #include <arpa/inet.h>
++#include <netinet/in.h>
+ #include <assert.h>
+ #include <pthread.h>
+ #include <stdio.h>
+@@ -172,7 +173,6 @@ void agent() {
+     memcpy(&options, request.data(), sizeof(options));
+ 
+     vector<string> servers;
+-
+     for (int i = 0; i < options.server_given; i++) {
+       servers.push_back(s_recv(socket));
+       s_send(socket, "ACK");
+@@ -228,7 +228,7 @@ void prep_agent(const vector<string>& servers, options_t& options) {
+   int master_sum = sum;
+   if (args.measure_qps_given) {
+     sum = 0;
+-    if (options.qps) options.qps -= args.measure_qps_arg;
++    if (options.qps && !args.special_given) options.qps -= args.measure_qps_arg;
+   }
+ 
+   for (auto s: agent_sockets) {
+@@ -251,6 +251,9 @@ void prep_agent(const vector<string>& servers, options_t& options) {
+     }
+   }
+ 
++  // SPECIAL: give every client the full QPS specification
++  if (args.special_given) sum = sum / agent_sockets.size();
++
+   // Adjust options_t according to --measure_* arguments.
+   options.lambda_denom = sum;
+   options.lambda = (double) options.qps / options.lambda_denom *
+@@ -556,14 +559,19 @@ int main(int argc, char **argv) {
+     int max = atoi(max_ptr);
+     int step = atoi(step_ptr);
+ 
+-    printf("%-7s %7s %7s %7s %7s %7s %7s %7s %7s %8s %8s\n",
+-           "#type", "avg", "min", "1st", "5th", "10th",
+-           "90th", "95th", "99th", "QPS", "target");
++    printf("%-7s %7s %7s %7s %7s %7s %7s %7s %7s %7s %8s %8s\n",
++           "#type", "avg", "dev", "1st", "5th", "10th",
++           "50th", "90th", "95th", "99th", "QPS", "target");
+ 
+     for (int q = min; q <= max; q += step) {
+       args_to_options(&options);
+ 
+-      options.qps = q;
++      if (args.special_given) {
++        args.measure_qps_given = 1;
++        args.measure_qps_arg = q;
++      } else {
++        options.qps = q;
++      }
+       options.lambda = (double) options.qps / (double) options.lambda_denom * args.lambda_mul_arg;
+       //      options.lambda = (double) options.qps / options.connections /
+       //        args.server_given /
+@@ -586,6 +594,7 @@ int main(int argc, char **argv) {
+     stats.print_stats("read",   stats.get_sampler);
+     stats.print_stats("update", stats.set_sampler);
+     stats.print_stats("op_q",   stats.op_sampler);
++    stats.print_stats("rx",     stats.rx_sampler);
+ 
+     int total = stats.gets + stats.sets;
+ 
+@@ -716,7 +725,7 @@ void go(const vector<string>& servers, options_t& options,
+     for (int t = 0; t < options.threads; t++) {
+       ConnectionStats *cs;
+       if (pthread_join(pt[t], (void**) &cs)) DIE("pthread_join() failed");
+-      stats.accumulate(*cs);
++      stats.accumulate(*cs, 1);
+       delete cs;
+     }
+   } else if (options.threads == 1) {
+@@ -1012,7 +1021,7 @@ void do_mutilate(const vector<string>& servers, options_t& options,
+ 
+   // Tear-down and accumulate stats.
+   for (Connection *conn: connections) {
+-    stats.accumulate(conn->stats);
++    stats.accumulate(conn->stats, 0);
+     delete conn;
+   }
+ 
+@@ -1056,7 +1065,11 @@ void args_to_options(options_t* options) {
+   //  if (args.no_record_scale_given)
+   //    options->records = args.records_arg;
+   //  else
+-  options->records = args.records_arg / options->server_given;
++  if (options->server_given > 0) {
++    options->records = args.records_arg / options->server_given;
++  } else {
++    options->records = args.records_arg;
++  }
+ 
+   options->binary = args.binary_given;
+   options->sasl = args.username_given;
