@@ -136,3 +136,6 @@ for f in irq-*; do
 	tail +2 $f | grep -Fv async | grep -Fv total | avg.sh 4 | awk '{printf "%18.3f %18.3f %6.3f ", $2, $4, $5}'
 	echo "$f "
 done|sort -g -k3
+
+# test for empty multilate files
+for f in mutilate-*; do [ -s $f ] || echo $f; done

@@ -15,6 +15,7 @@ function DEBUG() {
 function usage() {
 	echo usage:
 	echo "$(basename $0) <interface> count [raw]"
+	echo "$(basename $0) <interface> setq <count>"
 	echo "$(basename $0) <interface> setirq1 <cpuset> <irq idx> <irq cnt>"
 	echo "$(basename $0) <interface> setirqN <cpuset> <irq idx> <irq cnt>"
 	echo "$(basename $0) <interface> setcoalesce <adaptive-rx> <adaptive-tx> <rx-usecs> <rx-frames> <rx-usecs-irq> <rx-frames-irq> <tx-usecs> <tx-frames> <tx-usecs-irq> <tx-frames-irq> <cqe-mode-rx> <cqe-mode-tx?"

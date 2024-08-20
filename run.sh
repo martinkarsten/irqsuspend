@@ -131,7 +131,7 @@ scp $dir/irq.sh $SERVER: >/dev/null 2>&1 &
 for h in $DRIVER $(echo $CLIENTS|tr , ' '); do scp $dir/tcp.sh $h: >/dev/null 2>&1 & done
 wait
 
-trap "echo cleaning up; cleanup; check_last_file" EXIT
+trap "echo cleaning up; cleanup; check_last_file; wait" EXIT
 trap "exit 1" SIGHUP SIGINT SIGQUIT SIGTERM
 
 [ "$RUNS" = "clean" ] && exit 0 # exit trap cleans up
@@ -191,7 +191,7 @@ for tc in $TESTCASES; do
 	MEMSPEC="-t $cpus -N $cpus -b 16384 -c 32768 -m 10240 -o hashpower=24,no_lru_maintainer,no_lru_crawler"
 	MUTSPEC="-c $conns -q $qps -d 1 -u 0.03"
 	ssh $SERVER ./irq.sh $IFACE setq $irqs setirqN $OTHER 0 0 setirq1 $irqcpuset 0 $irqs setpoll $POLLVAR show > setup-$file.out
-	echo "$MEMVAR taskset -c $runcpuset $MEMCACHED $MEMSPEC" > memcached-$file.out
+	printf "$MEMVAR taskset -c $runcpuset $MEMCACHED $MEMSPEC\n\n" > memcached-$file.out
 	ssh -f $SERVER "$MEMVAR taskset -c $runcpuset $MEMCACHED $MEMSPEC"
 	(pdsh -w $CLIENTS $MUTILATE -A 2>/dev/null &); sleep 1
 	echo -n "LOAD "; timeout 30s ssh $DRIVER $MUTILATE $MUTARGS --loadonly
@@ -207,8 +207,8 @@ for tc in $TESTCASES; do
 		ssh -f $SERVER "sleep 12; taskset -c $observer $PERF stat -C $allcpuset -e cycles,instructions --no-big-num -- sleep 10 2>&1" > perf-$file.out
 	}
 	ssh $SERVER ./irq.sh $IFACE count > /dev/null
-	printf "$MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t 30\n\n" > mutilate-$file.out
-	echo "RUN "; timeout 60s ssh $DRIVER $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t 30 | tee -a mutilate-$file.out # experiment
+	printf "$MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t 30\n\n" >> memcached-$file.out
+	echo "RUN "; timeout 60s ssh $DRIVER $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t 30 | tee mutilate-$file.out # experiment
 	ssh $SERVER ./irq.sh $IFACE count | tee irq-$file.out
 	ssh $SERVER cat /sys/kernel/debug/tracing/events/syscalls/sys_exit_epoll_wait/hist|grep -F mc-worker > epoll-$file.out
 	ssh $SERVER sudo sh -c "'echo \!hist:key=common_pid.execname,ret > /sys/kernel/debug/tracing/events/syscalls/sys_exit_epoll_wait/trigger'"
