@@ -103,7 +103,7 @@ cleanup() {
 	pdsh -w $DRIVER,$CLIENTS killall -q -9 mutilate 2>/dev/null
 	ssh $SERVER killall -q -9 memcached 2>/dev/null
 	ssh $SERVER sudo killall -q -9 bpftrace 2>/dev/null
-	ssh $SERVER ./irq.sh $IFACE setpoll 0 0 0
+	ssh $SERVER ./irq.sh $IFACE setcoalesce $COALESCEd setpoll 0 0 0
 }
 
 check_last_file() {
@@ -146,18 +146,15 @@ for tc in $TESTCASES; do
 	[ -f mutilate-$file.out ] && { echo "already done"; continue; }
 	conns=$CONNS; cpus=$CORES
 	case "$tc" in # testcases start
-		base)       HTSPLIT=true;  POLLVAR="       0   0        0"; MEMVAR="";;
-		busy)       HTSPLIT=false; POLLVAR="  200000 100        0"; MEMVAR="_MP_Usecs=64   _MP_Budget=64 _MP_Prefer=1";;
-		fullbusy)   HTSPLIT=false; POLLVAR=" 5000000 100        0"; MEMVAR="_MP_Usecs=1000 _MP_Budget=64 _MP_Prefer=1"; MEMSPEC+=" -y";;
-		defer10)    HTSPLIT=true;  POLLVAR="   10000 100        0"; MEMVAR="";;
-		defer20)    HTSPLIT=true;  POLLVAR="   20000 100        0"; MEMVAR="";;
-		defer50)    HTSPLIT=true;  POLLVAR="   50000 100        0"; MEMVAR="";;
-		defer200)   HTSPLIT=true;  POLLVAR="  200000 100        0"; MEMVAR="";;
-		defer2000)  HTSPLIT=true;  POLLVAR=" 2000000 100        0"; MEMVAR="";;
-		suspend10)  HTSPLIT=false; POLLVAR="   10000 100 20000000"; MEMVAR="_MP_Usecs=0  _MP_Budget=64 _MP_Prefer=1";;
-		suspend20)  HTSPLIT=false; POLLVAR="   20000 100 20000000"; MEMVAR="_MP_Usecs=0  _MP_Budget=64 _MP_Prefer=1";;
-		suspend50)  HTSPLIT=false; POLLVAR="   50000 100 20000000"; MEMVAR="_MP_Usecs=0  _MP_Budget=64 _MP_Prefer=1";;
-		suspend200) HTSPLIT=false; POLLVAR="  200000 100 20000000"; MEMVAR="_MP_Usecs=0  _MP_Budget=64 _MP_Prefer=1";;
+		base)       CL=d; HTSPLIT=true;  POLLVAR="       0   0        0"; MEMVAR="";;
+		defer20)    CL=d; HTSPLIT=true;  POLLVAR="   20000 100        0"; MEMVAR="";;
+		defer50)    CL=d; HTSPLIT=true;  POLLVAR="   50000 100        0"; MEMVAR="";;
+		defer200)   CL=d; HTSPLIT=true;  POLLVAR="  200000 100        0"; MEMVAR="";;
+		napibusy)   CL=d; HTSPLIT=false; POLLVAR="  200000 100        0"; MEMVAR="_MP_Usecs=64   _MP_Budget=64 _MP_Prefer=1";;
+		fullbusy)   CL=d; HTSPLIT=false; POLLVAR=" 5000000 100        0"; MEMVAR="_MP_Usecs=1000 _MP_Budget=64 _MP_Prefer=1"; MEMSPEC+=" -y";;
+		suspend20)  CL=d; HTSPLIT=false; POLLVAR="   20000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
+		suspend50)  CL=d; HTSPLIT=false; POLLVAR="   50000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
+		suspend200) CL=d; HTSPLIT=false; POLLVAR="  200000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
 		*) echo UNKNOWN TEST CASE $tc; continue;;
 	esac          # testcases end
 	$opt_ht && {
@@ -190,7 +187,8 @@ for tc in $TESTCASES; do
 	}
 	MEMSPEC="-t $cpus -N $cpus -b 16384 -c 32768 -m 10240 -o hashpower=24,no_lru_maintainer,no_lru_crawler"
 	MUTSPEC="-c $conns -q $qps -d 1 -u 0.03"
-	ssh $SERVER ./irq.sh $IFACE setq $irqs setirqN $OTHER 0 0 setirq1 $irqcpuset 0 $irqs setpoll $POLLVAR show > setup-$file.out
+	eval COALESCING=\$COALESCE$CL
+	ssh $SERVER ./irq.sh $IFACE setq $irqs setirqN $OTHER 0 0 setirq1 $irqcpuset 0 $irqs setcoalesce $COALESCING setpoll $POLLVAR show > setup-$file.out
 	printf "$MEMVAR taskset -c $runcpuset $MEMCACHED $MEMSPEC\n\n" > memcached-$file.out
 	ssh -f $SERVER "$MEMVAR taskset -c $runcpuset $MEMCACHED $MEMSPEC"
 	(pdsh -w $CLIENTS $MUTILATE -A 2>/dev/null &); sleep 1
@@ -223,16 +221,3 @@ for tc in $TESTCASES; do
 done; done; done
 
 exit 0
-
-
-# set coalescing parameters, e.g., for mlx5
-COALESCEd=" on  on  8 128 na na  8 128 na na  on off" # default
-COALESCE1="off off  8 128 na na  8 128 na na off off" # Adaptive RX/TX off, CQE mode RX off
-COALESCE0="off off  0   1 na na  0   1 na na off off" # all coalescing off
-CL=d
-eval COALESCING=\$COALESCE$CL
-ssh $SERVER ./irq.sh setcoalesce $COALESCING
-ssh $SERVER ./irq.sh setcoalesce $COALESCEd # reset to default
-
-# default coalescing parameters for mlx4
-COALESCEd=" on na 16 44 na na 16 16 na 256 na na" # default

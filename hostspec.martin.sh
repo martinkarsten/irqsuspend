@@ -25,3 +25,17 @@ case $SERVER in
 	*)
 		echo unknown server $SERVER; exit 1;;
 esac
+case $SERVER in
+	tilly01|node10)
+		COALESCEd=" on  on  8 128 na na  8 128 na na  on off" # default
+		COALESCE1="off off  8 128 na na  8 128 na na  on off" # Adaptive RX/TX off
+		COALESCE0="off off  0   1 na na  0   1 na na off off" # all coalescing off
+		;;
+	red01|red01vm|tilly02)
+		COALESCEd=" on  na 16  44 na na 16  16 na 256 na  na" # default
+		COALESCE1="off  na 16  44 na na 16  16 na 256 na  na" # Adaptive RX/TX off
+		COALESCE0="off  na  0   1 na na  0   1 na 256 na  na" # all coalescing off
+		;;
+	*)
+		echo unknown server $SERVER; exit 1;;
+esac
