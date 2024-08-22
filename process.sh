@@ -35,7 +35,7 @@ function getnumber() {
 		*)		filter="cat";;
 	esac
 	ls $file-$q-$t-*.out >/dev/null 2>&1 \
-	&& grep -F $text $file-$q-$t-*.out|eval "$filter"|$(dirname $0)/avg.sh $1 $2 \
+	&& grep -F $text $file-$q-$t-*.out|eval "$filter"|sort -g -k $1|$(dirname $0)/avg.sh $1 $2 \
 	|| echo X
 }
 
@@ -48,11 +48,11 @@ case $OUTPUT in
 				[ $q -eq 0 ] && s=MAX || s=$(($q/1000))K
 				printf "%6s" $s
 				file=mutilate; text=QPS;  getnumber 4  |awk '{printf "%8.0f", $2}'
-				file=mutilate; text=read; getnumber 2  |awk '{printf "%8.0f", $2}'
-				file=mutilate; text=read; getnumber 9  |awk '{printf "%8.0f", $2}'
-				file=mutilate; text=read; getnumber 10 |awk '{printf "%8.0f", $2}'
+				file=mutilate; text=read; getnumber 2  |awk '{printf "%8.0f", $6}'
+				file=mutilate; text=read; getnumber 9  |awk '{printf "%8.0f", $6}'
+				file=mutilate; text=read; getnumber 10 |awk '{printf "%8.0f", $6}'
 				file=sar; text=Average;   getnumber 12 |awk '{printf "%8.0f", $2}'
-			  echo
+				echo
 			done;echo
 		done;;
 	qtable)
@@ -63,11 +63,11 @@ case $OUTPUT in
 				[ $q -eq 0 ] && s=MAX || s=$(($q/1000))K
 				printf "%10s%6s" $t $s
 				file=mutilate; text=QPS;  getnumber 4  |awk '{printf "%8.0f", $2}'
-				file=mutilate; text=read; getnumber 2  |awk '{printf "%8.0f", $2}'
-				file=mutilate; text=read; getnumber 9  |awk '{printf "%8.0f", $2}'
-				file=mutilate; text=read; getnumber 10 |awk '{printf "%8.0f", $2}'
+				file=mutilate; text=read; getnumber 2  |awk '{printf "%8.0f", $6}'
+				file=mutilate; text=read; getnumber 9  |awk '{printf "%8.0f", $6}'
+				file=mutilate; text=read; getnumber 10 |awk '{printf "%8.0f", $6}'
 				file=sar; text=Average;   getnumber 12 |awk '{printf "%8.0f", $2}'
-			  echo
+				echo
 			done|$SORT;echo
 		done;;
 	rtable)
@@ -75,34 +75,34 @@ case $OUTPUT in
 			echo $t
 			printf "%6s" load; for q in $QPS; do
 				[ $q -eq 0 ] && s=MAX || s=$(($q/1000))K
-        printf "%8s" $s
+				printf "%8s" $s
 			done;echo
 			printf "%6s" qps; for q in $QPS; do
 				file=mutilate; text=QPS;  getnumber 4  |awk '{printf "%8.0f", $2}'
 			done;echo
 			printf "%6s" avglat; for q in $QPS; do
-				file=mutilate; text=read; getnumber 2  |awk '{printf "%8.0f", $2}'
+				file=mutilate; text=read; getnumber 2  |awk '{printf "%8.0f", $6}'
 			done;echo
 			printf "%6s" 95%lat; for q in $QPS; do
-				file=mutilate; text=read; getnumber 9  |awk '{printf "%8.0f", $2}'
+				file=mutilate; text=read; getnumber 9  |awk '{printf "%8.0f", $6}'
 			done;echo
 			printf "%6s" 99%lat; for q in $QPS; do
-				file=mutilate; text=read; getnumber 10 |awk '{printf "%8.0f", $2}'
+				file=mutilate; text=read; getnumber 10 |awk '{printf "%8.0f", $6}'
 			done;echo
 			printf "%6s" cpu; for q in $QPS; do
 				file=sar; text=Average;   getnumber 12 |awk '{printf "%8.0f", $2}'
 			done;echo
-		  echo
+			echo
 		done;;
 	qps)
-	  for q in $QPS; do for t in $TC; do
-	  	[ $q -eq 0 ] && s=MAX || s=$(($q/1000))K
-   	  printf "%5s %12s" $s $t; getnumber $*|awk '{printf "%18.3f %18.3f %6.3f\n", $2, $4, $5}'
-	  done|$SORT; echo; done;;
+		for q in $QPS; do for t in $TC; do
+			[ $q -eq 0 ] && s=MAX || s=$(($q/1000))K
+			printf "%5s %12s" $s $t; getnumber $*|awk '{printf "%18.3f %18.3f %6.3f %18.3f\n", $2, $4, $5, $6}'
+		done|$SORT; echo; done;;
 	tc)
 		for t in $TC; do for q in $QPS; do
 			[ $q -eq 0 ] && s=MAX || s=$(($q/1000))K
-			printf "%12s %5s" $t $s; getnumber $*|awk '{printf "%18.3f %18.3f %6.3f\n", $2, $4, $5}'
+			printf "%12s %5s" $t $s; getnumber $*|awk '{printf "%18.3f %18.3f %6.3f %18.3f\n", $2, $4, $5, $6}'
 		done; echo; done;;
 	*)   echo internal error; exit 1;;
 esac
@@ -131,7 +131,7 @@ process.sh -q 6 # table by qps: tc in x, result in y, sorted by 99%lat
 
 process.sh sar Average 12|sort -k5 -g # maximum COV
 
-# sort runs by COV of rx packet distribution across queues
+# sort all runs by COV of rx packet distribution across queues
 for f in irq-*; do
 	tail +2 $f | grep -Fv async | grep -Fv total | avg.sh 4 | awk '{printf "%18.3f %18.3f %6.3f ", $2, $4, $5}'
 	echo "$f "

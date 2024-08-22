@@ -21,7 +21,10 @@ AWKSCRIPT="BEGIN {
 	if (v < min) { min = v }
 	sum += (v*w)
 	sum2 += (v*v*w)
-	cnt += w
+	for (i = 0; i < w; i++) {
+		val[cnt] = v
+		cnt += 1
+	}
 }
 
 END {
@@ -31,9 +34,14 @@ END {
 		else stddev = 0
 		if (avg > 0) cov = stddev/avg
 		else cov = 0
-		printf \"%.3f %.3f %.3f %.3f %.3f %.3f (min,avg,max,std,cov,sum)\\n\", min, avg, max, stddev, cov, sum
+		if (cnt % 2) {
+			med =  val[(cnt - 1) / 2];
+		} else {
+			med = (val[(cnt / 2) - 1] + val[(cnt / 2)]) / 2;
+		}
+		printf \"%.3f %.3f %.3f %.3f %.3f %.3f %.3f (min,avg,max,std,cov,med,sum)\\n\", min, avg, max, stddev, cov, med, sum
 	} else {
-		printf \"X X X X X X\\n\"
+		printf \"X X X X X X X\\n\"
 	}
 }"
 
