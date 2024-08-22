@@ -11,11 +11,11 @@ OUTPUT=qps
 SORT="cat"
 
 case $1 in
-	-c) OUTPUT=tc;          shift; [ $# -lt 3 ] && usage;;
-	-q) OUTPUT=qtable;      shift;;
-	-r) OUTPUT=rtable;      shift;;
-	-s) SORT="sort -g -k3"; shift; [ $# -lt 3 ] && usage;;
-	-t) OUTPUT=table;       shift;;
+	-c) OUTPUT=tc;           shift; [ $# -lt 3 ] && usage;;
+	-q) OUTPUT=qtable;       shift;;
+	-r) OUTPUT=rtable;       shift;;
+	-s) SORT="sort -n -k 3"; shift; [ $# -lt 3 ] && usage;;
+	-t) OUTPUT=table;        shift;;
 	*)  [ $# -lt 3 ] && usage;;
 esac
 
@@ -23,8 +23,8 @@ file=$1
 text=$2
 shift 2
 
-TC=$(ls *.out|cut -f3 -d-|sort|uniq)
-QPS=$(ls *.out|cut -f2 -d-|sort -g|uniq)
+TC=$(ls *.out|cut -f3 -d-|sort -V|uniq)
+QPS=$(ls *.out|cut -f2 -d-|sort -n|uniq)
 # move 0 (max) to the end
 echo $QPS|grep -q "^0 " && QPS="$(echo $QPS|cut -f2- -d' ') 0"
 
@@ -35,7 +35,7 @@ function getnumber() {
 		*)		filter="cat";;
 	esac
 	ls $file-$q-$t-*.out >/dev/null 2>&1 \
-	&& grep -F $text $file-$q-$t-*.out|eval "$filter"|sort -g -k $1|$(dirname $0)/avg.sh $1 $2 \
+	&& grep -F $text $file-$q-$t-*.out|eval "$filter"|$(dirname $0)/avg.sh $1 $2 \
 	|| echo X
 }
 
@@ -56,7 +56,7 @@ case $OUTPUT in
 			done;echo
 		done;;
 	qtable)
-		[ $# -gt 0 ] && SORT="sort -g -k$1" || SORT="cat"
+		[ $# -gt 0 ] && SORT="sort -n -k $1" || SORT="cat"
 		for q in $QPS; do
 			printf "%10s%6s%8s%8s%8s%8s%8s\n" testcase load qps avglat 95%lat 99%lat cpu
 			for t in $TC; do
@@ -129,13 +129,13 @@ process.sh -t   # table by tc:  load in y, result in x
 process.sh -r   # table by tc:  load in x, result in y
 process.sh -q 6 # table by qps: tc in x, result in y, sorted by 99%lat
 
-process.sh sar Average 12|sort -k5 -g # maximum COV
+process.sh sar Average 12|sort -n -k 5 # maximum COV
 
 # sort all runs by COV of rx packet distribution across queues
 for f in irq-*; do
 	tail +2 $f | grep -Fv async | grep -Fv total | avg.sh 4 | awk '{printf "%18.3f %18.3f %6.3f ", $2, $4, $5}'
 	echo "$f "
-done|sort -g -k3
+done|sort -n -k 3
 
 # test for empty multilate files
 for f in mutilate-*; do [ -s $f ] || echo $f; done

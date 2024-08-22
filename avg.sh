@@ -47,4 +47,4 @@ END {
 
 [ $# -ge 1 ] || usage
 [ $# -gt 1 ] && w=$2 || w=0
-exec awk -v column=$1 -v weight=$w -- "${AWKSCRIPT}"
+sort -n -k $1 | awk -v column=$1 -v weight=$w -- "${AWKSCRIPT}"

@@ -30,7 +30,7 @@ dev=$1; shift
 [ -d /sys/class/net/$dev ] || error device $dev not found
 
 # obtain index list of irqs associated with device
-irqlist=($(ls /sys/class/net/$dev/device/msi_irqs|sort -g))
+irqlist=($(ls /sys/class/net/$dev/device/msi_irqs|sort -n))
 irqtotal=${#irqlist[@]}
 DEBUG IRQs: $irqtotal - ${irqlist[@]}
 
