@@ -60,6 +60,11 @@ case $option in
 esac; done
 shift $(($OPTIND - 1))
 
+# set a default
+COALESCEd="na na na na na na na na na na na na"
+COALESCE1="na na na na na na na na na na na na"
+COALESCE0="na na na na na na na na na na na na"
+
 # client & server settings based on server name
 [ $# -gt 0 ] || usage
 case $1 in

@@ -36,6 +36,4 @@ case $SERVER in
 		COALESCE1="off  na 16  44 na na 16  16 na 256 na  na" # Adaptive RX/TX off
 		COALESCE0="off  na  0   1 na na  0   1 na 256 na  na" # all coalescing off
 		;;
-	*)
-		echo unknown server $SERVER; exit 1;;
 esac
