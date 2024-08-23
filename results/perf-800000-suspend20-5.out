@@ -1,0 +1,8 @@
+
+ Performance counter stats for 'CPU(s) 16-23':
+
+      217656405961      cycles                                                                
+      231787367086      instructions                     #    1.06  insn per cycle            
+
+      10.003356571 seconds time elapsed
+

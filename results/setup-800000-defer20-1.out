@@ -1,0 +1,22 @@
+Adaptive RX: on TX: on
+rx-usecs: 8
+rx-frames: 128
+tx-usecs: 8
+tx-frames: 128
+CQE mode RX: on TX: off
+Pre-set maximums:
+RX:			8192
+TX:			8192
+Current hardware settings:
+RX:			1024
+TX:			1024
+TX Push:		off
+RX Push:		off
+TCP data split:		off
+Pre-set maximums:
+Combined:	63
+Current hardware settings:
+Combined:	8
+gro_flush_timeout: 20000
+napi_defer_hard_irqs: 100
+irq_suspend_timeout: 0

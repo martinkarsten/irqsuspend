@@ -1,0 +1,15 @@
+/home/jdamato/mutilate/mutilate -T 32 -s 172.25.17.32 -K fb_key -V fb_value -i fb_ia -r 1000000 -c 20 -q 400000 -d 1 -u 0.03  -a cache-sql13431.hosts.secretcdn.net -a cache-sql13433.hosts.secretcdn.net -a cache-sql13442.hosts.secretcdn.net -a cache-sql13435.hosts.secretcdn.net -a cache-sql13436.hosts.secretcdn.net -a cache-sql13439.hosts.secretcdn.net --noload -t 30
+
+#type       avg     std     min     5th    10th    50th    90th    95th    99th
+read      154.2    76.0    26.8    48.1    59.0   149.6   250.4   269.3   325.2
+update    156.1    81.7    32.4    49.8    60.2   151.4   252.5   270.6   327.4
+op_q        1.0     0.0     1.0     1.0     1.0     1.1     1.1     1.1     1.1
+rx      640239.5 29692.4 491466.8 575952.9 585502.3 643030.4 681690.8 691950.9 742132.0
+
+Total QPS = 400036.9 (12001108 / 30.0s)
+
+Misses = 0 (0.0%)
+Skipped TXs = 0 (0.0%)
+
+RX 2872990259 bytes :   91.3 MB/s
+TX  580002927 bytes :   18.4 MB/s

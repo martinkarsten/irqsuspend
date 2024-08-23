@@ -137,5 +137,9 @@ for f in irq-*; do
 	echo "$f "
 done|sort -n -k 3
 
+# sort by COV to detect outliers in data set
+process.sh -s mutilate QPS 4|sort -g -k5
+process.sh -s mutilate read 10|sort -g -k5
+
 # test for empty multilate files
 for f in mutilate-*; do [ -s $f ] || echo $f; done
