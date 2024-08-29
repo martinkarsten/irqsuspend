@@ -104,11 +104,17 @@ killproc() {
 	ssh $SERVER sudo killall -q bpftrace
 }
 
+qdef=max
+
+startup() {
+	qdef=$(ssh $SERVER ./irq.sh $IFACE getq)
+}
+
 cleanup() {
 	pdsh -w $DRIVER,$CLIENTS killall -q -9 mutilate 2>/dev/null
 	ssh $SERVER killall -q -9 memcached 2>/dev/null
 	ssh $SERVER sudo killall -q -9 bpftrace 2>/dev/null
-	ssh $SERVER ./irq.sh $IFACE setcoalesce $COALESCEd setpoll 0 0 0
+	ssh $SERVER ./irq.sh $IFACE setq $qdef setcoalesce $COALESCEd setpoll 0 0 0
 }
 
 check_last_file() {
@@ -123,7 +129,7 @@ MUTILATE+=" -T $MUTCORES"
 
 # build kernel, if requested
 $opt_build && {
-	$(dirname $0)/build.sh full $SERVER || exit 1
+	$(dirname $0)/build.sh $SERVER || exit 1
 } || {
 	echo "waiting for server"
 	until ssh -t -oPasswordAuthentication=no $SERVER ./setup.sh 2>/dev/null; do sleep 3; done
@@ -136,6 +142,7 @@ scp $dir/irq.sh $SERVER: >/dev/null 2>&1 &
 for h in $DRIVER $(echo $CLIENTS|tr , ' '); do scp $dir/tcp.sh $h: >/dev/null 2>&1 & done
 wait
 
+startup
 trap "echo cleaning up; cleanup; check_last_file; wait" EXIT
 trap "exit 1" SIGHUP SIGINT SIGQUIT SIGTERM
 
@@ -195,7 +202,7 @@ for tc in $TESTCASES; do
 	MEMSPEC="-t $cpus -N $cpus -b 16384 -c 32768 -m 10240 -o hashpower=24,no_lru_maintainer,no_lru_crawler"
 	MUTSPEC="-c $conns -q $qps -d 1 -u 0.03"
 	eval COALESCING=\$COALESCE$CL
-	ssh $SERVER ./irq.sh $IFACE setq $irqs setirqN $OTHER 0 0 setirq1 $irqcpuset 0 $irqs setcoalesce $COALESCING setpoll $POLLVAR show > setup-$file.out
+	ssh $SERVER NDCLI=\"$NDCLI\" ./irq.sh $IFACE setq $irqs setirqN $OTHER 0 0 setirq1 $irqcpuset 0 $irqs setcoalesce $COALESCING setpoll $POLLVAR show > setup-$file.out
 	printf "$MEMVAR taskset -c $runcpuset $MEMCACHED $MEMSPEC\n\n" > memcached-$file.out
 	ssh -f $SERVER "$MEMVAR taskset -c $runcpuset $MEMCACHED $MEMSPEC"
 	(pdsh -w $CLIENTS $MUTILATE -A 2>/dev/null &); sleep 1

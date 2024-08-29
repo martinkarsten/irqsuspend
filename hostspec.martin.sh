@@ -1,5 +1,6 @@
 SERVER=$1
 MEMCACHED="work/memcached/memcached"; MUTILATE="mutilate"; PERF="/usr/local/perf/bin/perf"; FGDIR="~/work/FlameGraph"
+NDCLI="linux/net-next/tools/net/ynl/cli.py --no-schema --output-json --spec linux/net-next/Documentation/netlink/specs/netdev.yaml"
 case $SERVER in
 	red01)
 		IFACE=enp130s0; SERVER_IP=10.10.0.1; DRIVER=red02; CLIENTS=red03,red04,red05,red06,red08,red09

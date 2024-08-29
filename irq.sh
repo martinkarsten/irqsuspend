@@ -15,6 +15,7 @@ function DEBUG() {
 function usage() {
 	echo usage:
 	echo "$(basename $0) <interface> count [raw]"
+	echo "$(basename $0) <interface> irqmap"
 	echo "$(basename $0) <interface> setq <count>"
 	echo "$(basename $0) <interface> setirq1 <cpuset> <irq idx> <irq cnt>"
 	echo "$(basename $0) <interface> setirqN <cpuset> <irq idx> <irq cnt>"
@@ -34,10 +35,50 @@ irqlist=($(ls /sys/class/net/$dev/device/msi_irqs|sort -n))
 irqtotal=${#irqlist[@]}
 DEBUG IRQs: $irqtotal - ${irqlist[@]}
 
-# hard-code NIC queue -> irq idx mapping for various drivers/parts/hosts/etc. until netdev-genl tooling is ready
+# obtain number of relevant interrupts
+rxtotal=$(ethtool -l $dev|grep -F RX:      |head -1|awk '{print $2}'); [ "$rxtotal" = "n/a" ] && rxtotal=0
+txtotal=$(ethtool -l $dev|grep -F TX:      |head -1|awk '{print $2}'); [ "$txtotal" = "n/a" ] && txtotal=0
+cbtotal=$(ethtool -l $dev|grep -F Combined:|head -1|awk '{print $2}'); [ "$cbtotal" = "n/a" ] && cbtotal=0
+qcnttotal=$(($rxtotal + $cbtotal))
+rxcurr=$(ethtool -l $dev|grep -F RX:      |tail -1|awk '{print $2}'); [ "$rxcurr" = "n/a" ] && rxcurr=0
+txcurr=$(ethtool -l $dev|grep -F TX:      |tail -1|awk '{print $2}'); [ "$txcurr" = "n/a" ] && txcurr=0
+cbcurr=$(ethtool -l $dev|grep -F Combined:|tail -1|awk '{print $2}'); [ "$cbcurr" = "n/a" ] && cbcurr=0
+qcntcurr=$(($rxcurr + $cbcurr))
+DEBUG QUEUEs: $rxtotal $txtotal $cbtotal $qcnttotal $rxcurr $txcurr $cbcurr $qcntcurr
+[ $qcnttotal -le $irqtotal ] || error "qcnttotal $qcnttotal > irqtotal $irqtotal"
+[ $qcntcurr -le $qcnttotal ] || error "qcntcurr $qcntcurr > qcnttotal $qcnttotal"
+
+if [[ $NDCLI ]]; then
+	ifx=$(ip l show $dev|head -1|cut -f1 -d:)
+	napiraw=($($NDCLI --dump queue-get --json="{\"ifindex\": $ifx}"|jq '.[] | .id,."napi-id"'))
+	for ((i=0;i<${#napiraw[@]};i+=2)); do
+		napimap[${napiraw[i]}]=${napiraw[i+1]}
+	done
+	DEBUG ${napimap[@]}
+fi
+
+if [ "$1" = "irqmap" ]; then
+	shift
+	if [[ $NDCLI ]]; then
+		echo ${irqlist[@]}
+		irqsraw=($($NDCLI --dump napi-get --json="{\"ifindex\": $ifx}"|jq '.[] | .id,.irq'))
+		for ((i=0;i<${#irqsraw[@]};i+=2)); do
+			tempirqmap[${irqsraw[i]}]=${irqsraw[i+1]}
+		done
+		for ((q=0;q<$qcnttotal;q+=1)); do
+			irqmap[$q]=${tempirqmap[napimap[q]]}
+		done
+		echo ${irqmap[@]}
+		unset irqmap
+	else
+		error "cannot determine irq map, if netdev-genl cli is not provided"
+	fi
+fi
+
 driver=$(ethtool -i $dev | grep -F driver | awk '{print $2}')
 DEBUG $driver
 
+# use hard-coded irqmap
 case $driver in
 mlx4_en|mlx5_core)
 	pci_id=$(basename $(readlink /sys/class/net/$dev/device))
@@ -45,20 +86,20 @@ mlx4_en|mlx5_core)
 	DEBUG $part
 	case $part in
 	649283-B21|661687-001) # mlx4_en: tilly machines
-		rxmap=(33 34 35 36 37 38 39 40 49 50 51 52 53 54 55 56 41 42 43 44 45 56 47 48 57 58 59 60 61 62 63 64);;
+		irqmap=(33 34 35 36 37 38 39 40 49 50 51 52 53 54 55 56 41 42 43 44 45 56 47 48 57 58 59 60 61 62 63 64);;
 	MCX311A-XCAT)          # mlx4_en: red01, red01vm (PCI passthrough)
 		case $HOSTNAME in
 		red01vm)
-			rxmap=( 1  2  3  4  5  6);;
+			irqmap=( 1  2  3  4  5  6);;
 		*)
-			rxmap=( 7  8  9 10 11 12 19 20 21 22 23 24  1  2  3  4  5  6 13 14 15 16 17 18);;
+			irqmap=( 7  8  9 10 11 12 19 20 21 22 23 24  1  2  3  4  5  6 13 14 15 16 17 18);;
 		esac;;
 	MCX4121A-ACAT)         # mlx5_core: tilly01
-		cbmap=( 1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32);;
+		irqmap=( 1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32);;
 	MCX515A-CCAT)          # mlx5_core: intrepid node10
-		cbmap=( 1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20);;
+		irqmap=( 1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20);;
 	MCX516A-CDAT)          # mlx5_core: cache-sql13432
-		cbmap=( 1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63);;
+		irqmap=( 1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63);;
 	*) error unsupported part $part for $driver;;
 	esac;;
 *)
@@ -72,14 +113,10 @@ mlx4_en|mlx5_core)
 	esac;;
 esac
 
-# sanity checking
-rxtotal=$((ethtool -l $dev 2>/dev/null || echo "RX: 0")|grep -F RX:|head -1|awk '{print $2}')
-txtotal=$((ethtool -l $dev 2>/dev/null || echo "RX: 0")|grep -F TX:|head -1|awk '{print $2}')
-cbtotal=$((ethtool -l $dev 2>/dev/null || echo "Combined: 0")|grep -F Combined:|head -1|awk '{print $2}')
-DEBUG RINGs: $rxtotal $txtotal $cbtotal
-[ ! $rxmap ] || [ $rxtotal -eq ${#rxmap[@]} ] || error inconsistency between rxtotal $rxtotal and size of rxmap ${#rxmap[@]}
-[ ! $txmap ] || [ $txtotal -eq ${#txmap[@]} ] || error inconsistency between txtotal $txtotal and size of txmap ${#txmap[@]}
-[ ! $cbmap ] || [ $cbtotal -eq ${#cbmap[@]} ] || error inconsistency between cbtotal $cbtotal and size of cbmap ${#cbmap[@]}
+DEBUG ${irqmap[@]}
+
+# sanitychecking
+[ $qcnttotal -eq ${#irqmap[@]} ] || error inconsistency between qcnttotal $qcnttotal and size of irqmap ${#irqmap[@]}
 
 # process command-line arguments
 raw=false
@@ -91,15 +128,19 @@ while [ $# -gt 0 ]; do
 		[ "$1" = "raw" ] && { raw=true; shift; };;
 	setq)
 		[ $# -lt 2 ] && usage
+		[ "$2" = "max" ] && cnt=$qcnttotal || cnt=$2
 		case $driver in
 		mlx5_core)
-			sudo ethtool -L $dev combined $2;;
+			sudo ethtool -L $dev combined $cnt;;
 		mlx4_en)
-			sudo ethtool -L $dev rx $2 tx $2;;
+			sudo ethtool -L $dev rx $cnt;;
 		*)
 			error channel settings: unsupported $driver;;
 		esac
 		shift 2;;
+	getq)
+		echo $qcntcurr
+		shift 1;;
 	setirq1)
 		[ $# -lt 4 ] && usage
 		[ $4 -gt 0 ] && max=$(($3 + $4)) || max=$irqtotal
@@ -110,9 +151,7 @@ while [ $# -gt 0 ]; do
 			  high=$(echo $range|cut -f2 -d-)
 				for ((cpu=$low;cpu<=$high;cpu++)); do
 					# route each irq to a dedicated core (linear assignment)
-					[ $rxmap ] && sudo sh -c "echo $cpu > /proc/irq/${irqlist[${rxmap[idx]}]}/smp_affinity_list"
-					[ $txmap ] && sudo sh -c "echo $cpu > /proc/irq/${irqlist[${txmap[idx]}]}/smp_affinity_list"
-					[ $cbmap ] && sudo sh -c "echo $cpu > /proc/irq/${irqlist[${cbmap[idx]}]}/smp_affinity_list"
+					sudo sh -c "echo $cpu > /proc/irq/${irqlist[${irqmap[idx]}]}/smp_affinity_list"
 					# clear RPS, set XPS to dedicated core
 					sudo sh -c "echo 0 > /sys/class/net/$dev/queues/rx-$idx/rps_cpus"
 					sudo sh -c "echo 0 > /sys/class/net/$dev/queues/rx-$idx/rps_flow_cnt"
@@ -154,11 +193,19 @@ while [ $# -gt 0 ]; do
 		;;
 	setpoll)
 		[ $# -lt 4 ] && usage
-		sudo sh -c "echo $2 > /sys/class/net/$dev/gro_flush_timeout"
-		sudo sh -c "echo $3 > /sys/class/net/$dev/napi_defer_hard_irqs"
-		[ -e /sys/class/net/$dev/irq_suspend_timeout ] && \
-			sudo sh -c "echo $4 > /sys/class/net/$dev/irq_suspend_timeout" || \
-			echo irq_suspend_timeout not available
+		if [[ $NDCLI ]]; then
+			for ((q=0;q<$qcntcurr;q++)); do
+				nid=${napimap[q]}
+				sudo $NDCLI --do napi-set --json="{\"id\": $nid, \"gro-flush-timeout\": $2, \"defer-hard-irqs\": $3}" > /dev/null
+				sudo $NDCLI --do napi-set --json="{\"id\": $nid, \"irq-suspend-timeout\": $4}" >/dev/null 2>&1 || echo "irq-suspend-timeout not available"
+			done
+		else
+			sudo sh -c "echo $2 > /sys/class/net/$dev/gro_flush_timeout"
+			sudo sh -c "echo $3 > /sys/class/net/$dev/napi_defer_hard_irqs"
+#			[ -e /sys/class/net/$dev/irq_suspend_timeout ] && \
+#				sudo sh -c "echo $4 > /sys/class/net/$dev/irq_suspend_timeout" || \
+#				echo "irq_suspend_timeout not available"
+		fi
 		shift 4;;
 	show)
 		# TODO: also show IRQ routing...
@@ -169,10 +216,11 @@ while [ $# -gt 0 ]; do
 		ethtool -l $dev|grep -Fv "n/a"|grep -v $dev|grep -Ev "^$"
 		echo -n "gro_flush_timeout: "; cat /sys/class/net/$dev/gro_flush_timeout
 		echo -n "napi_defer_hard_irqs: "; cat /sys/class/net/$dev/napi_defer_hard_irqs
-		echo -n "irq_suspend_timeout: "
-		[ -e /sys/class/net/$dev/irq_suspend_timeout ] && \
-			cat /sys/class/net/$dev/irq_suspend_timeout || \
-			echo not available
+#		echo -n "irq_suspend_timeout: "
+#		[ -e /sys/class/net/$dev/irq_suspend_timeout ] && \
+#			cat /sys/class/net/$dev/irq_suspend_timeout || \
+#			echo not available
+		[[ $NDCLI ]] && $NDCLI --dump napi-get --json="{\"ifindex\": $ifx}"|jq .
 		shift;;
 	*) error unknown operation $1;;
 	esac
@@ -191,14 +239,12 @@ done
 # obtain current packet counters from ethtool -S
 idx=0
 for x in $(ethtool -S $dev|grep -E "(rx[0-9][0-9]*_packets:|rx_queue_[0-9][0-9]*_packets:)"|cut -f2 -d:); do
-	[ ${rxmap[idx]} ] && rxpktcnt[rxmap[idx]]=$((${rxpktcnt[rxmap[idx]]} + $x))
-	[ ${cbmap[idx]} ] && rxpktcnt[cbmap[idx]]=$((${rxpktcnt[cbmap[idx]]} + $x))
+	[ ${irqmap[idx]} ] && rxpktcnt[irqmap[idx]]=$((${rxpktcnt[irqmap[idx]]} + $x))
 	idx=$(($idx + 1))
 done
 idx=0
 for x in $(ethtool -S $dev|grep -E "(tx[0-9][0-9]*_packets:|tx_queue_[0-9][0-9]*_packets:)"|cut -f2 -d:); do
-	[ ${txmap[idx]} ] && txpktcnt[txmap[idx]]=$((${txpktcnt[txmap[idx]]} + $x))
-	[ ${cbmap[idx]} ] && txpktcnt[cbmap[idx]]=$((${txpktcnt[cbmap[idx]]} + $x))
+	[ ${irqmap[idx]} ] && txpktcnt[irqmap[idx]]=$((${txpktcnt[irqmap[idx]]} + $x))
 	idx=$(($idx + 1))
 done
 
