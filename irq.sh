@@ -55,6 +55,9 @@ if [[ $NDCLI ]]; then
 		napimap[${napiraw[i]}]=${napiraw[i+1]}
 	done
 	DEBUG ${napimap[@]}
+	NDCLITEST="$NDCLI --dump napi-get|grep -Fq gro-flush-timeout"
+else
+	NDCLITEST=false
 fi
 
 if [ "$1" = "irqmap" ]; then
@@ -193,7 +196,7 @@ while [ $# -gt 0 ]; do
 		;;
 	setpoll)
 		[ $# -lt 4 ] && usage
-		if [[ $NDCLI ]]; then
+		if eval "$NDCLITEST"; then
 			for ((q=0;q<$qcntcurr;q++)); do
 				nid=${napimap[q]}
 				sudo $NDCLI --do napi-set --json="{\"id\": $nid, \"gro-flush-timeout\": $2, \"defer-hard-irqs\": $3}" > /dev/null
@@ -220,7 +223,7 @@ while [ $# -gt 0 ]; do
 #		[ -e /sys/class/net/$dev/irq_suspend_timeout ] && \
 #			cat /sys/class/net/$dev/irq_suspend_timeout || \
 #			echo not available
-		[[ $NDCLI ]] && $NDCLI --dump napi-get --json="{\"ifindex\": $ifx}"|jq .
+		eval "$NDCLITEST" && $NDCLI --dump napi-get --json="{\"ifindex\": $ifx}"|jq .
 		shift;;
 	*) error unknown operation $1;;
 	esac
