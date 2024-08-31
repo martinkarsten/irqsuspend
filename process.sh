@@ -97,19 +97,19 @@ case $OUTPUT in
 	qps)
 		for q in $QPS; do for t in $TC; do
 			[ $q -eq 0 ] && s=MAX || s=$(($q/1000))K
-			printf "%5s %12s" $s $t; getnumber $*|awk '{printf "%18.3f %18.3f %6.3f %18.3f\n", $2, $4, $5, $6}'
+			printf "%5s %12s" $s $t; getnumber $*|awk '{printf "%18.3f %18.3f %6.3f %18.3f %6.3f\n", $2, $4, $5, $6, $7}'
 		done|$SORT; echo; done;;
 	tc)
 		for t in $TC; do for q in $QPS; do
 			[ $q -eq 0 ] && s=MAX || s=$(($q/1000))K
-			printf "%12s %5s" $t $s; getnumber $*|awk '{printf "%18.3f %18.3f %6.3f %18.3f\n", $2, $4, $5, $6}'
+			printf "%12s %5s" $t $s; getnumber $*|awk '{printf "%18.3f %18.3f %6.3f %18.3f %6.3f\n", $2, $4, $5, $6, $7}'
 		done; echo; done;;
 	*)   echo internal error; exit 1;;
 esac
 
 exit 0
 
-# sample invocations, sorted by load
+# sample invocations, by load, then TC, -s sorted by result
 process.sh -s mutilate QPS 4        # throughput
 process.sh -s mutilate read 2       # average latency
 process.sh -s mutilate read 3       # minimum latency
@@ -123,7 +123,7 @@ process.sh -s perf instructions 5   # average IPC
 process.sh -s epoll mc-worker 7 10  # average epoll return count
 process.sh -s poll @ 2 4            # average napi poll count
 
-process.sh -c mutilate QPS 4        # throughput, sorted by TC, then load
+process.sh -c mutilate QPS 4        # throughput, by TC, then load
 
 process.sh -t   # table by tc:  load in y, result in x
 process.sh -r   # table by tc:  load in x, result in y
@@ -143,3 +143,10 @@ process.sh -s mutilate read 10|sort -g -k5
 
 # test for empty multilate files
 for f in mutilate-*; do [ -s $f ] || echo $f; done
+
+# show CPQ (or IPQ with 'instructions' instead of 'cycles')
+for f in mutilate-*; do
+	q=$(grep -F QPS $f|awk '{print $5}'|cut -f2 -d\()
+	c=$(grep -F cycles perf-$(echo $f|cut -f2- -d-)|awk '{print $1}')
+	echo -n "$f "; echo "$c $q"|awk '{print $1 / $2}'
+done

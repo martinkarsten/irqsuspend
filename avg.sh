@@ -39,7 +39,7 @@ END {
 		} else {
 			med = (val[(cnt / 2) - 1] + val[(cnt / 2)]) / 2;
 		}
-		printf \"%.3f %.3f %.3f %.3f %.3f %.3f %.3f (min,avg,max,std,cov,med,sum)\\n\", min, avg, max, stddev, cov, med, sum
+		printf \"%.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f (min,avg,max,std,cov,med,spread,sum)\\n\", min, avg, max, stddev, cov, med, max / min, sum
 	} else {
 		printf \"X X X X X X X\\n\"
 	}
