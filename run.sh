@@ -212,6 +212,7 @@ for tc in $TESTCASES; do
 #	ssh -f $SERVER 'sudo bpftrace -e "tracepoint:napi:napi_debug { @[args->op,args->napi_id,args->cpu,args->data] = count(); }"' > napi-$file.out
 	pdsh -w $DRIVER,$CLIENTS ./tcp.sh >/dev/null
 	ssh $SERVER sudo sh -c "'echo hist:key=common_pid.execname,ret > /sys/kernel/debug/tracing/events/syscalls/sys_exit_epoll_wait/trigger'"
+#	ssh $SERVER sudo sh -c "'echo 1 > /sys/devices/system/cpu/intel_pstate/no_turbo'"
 	ssh -f $SERVER "sleep 12; taskset -c $observer sar -P $allcpuset -u ALL 1 10" > sar-$file.out
 	$opt_flamegraph && {
 		ssh -f $SERVER "sleep 12; taskset -c $observer $PERF record -C $allcpuset -F 99 -g -o perf.data -- sleep 10 >/dev/null"
