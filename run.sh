@@ -131,8 +131,7 @@ MUTILATE+=" -T $MUTCORES"
 $opt_build && {
 	$(dirname $0)/build.sh $SERVER || exit 1
 } || {
-	echo "waiting for server"
-	until ssh -t -oPasswordAuthentication=no $SERVER ./setup.sh 2>/dev/null; do sleep 3; done
+	$(dirname $0)/build.sh -w $SERVER
 }
 
 # copy script files
