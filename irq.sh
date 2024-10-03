@@ -49,15 +49,15 @@ DEBUG QUEUEs: $rxtotal $txtotal $cbtotal $qcnttotal $rxcurr $txcurr $cbcurr $qcn
 [ $qcntcurr -le $qcnttotal ] || error "qcntcurr $qcntcurr > qcnttotal $qcnttotal"
 
 if [[ $NDCLI ]]; then
+	$NDCLI --dump napi-get|grep -Fq gro-flush-timeout && PERNAPI=true || PERNAPI=false
 	ifx=$(ip l show $dev|head -1|cut -f1 -d:)
 	napiraw=($($NDCLI --dump queue-get --json="{\"ifindex\": $ifx}"|jq '.[] | .id,."napi-id"'))
 	for ((i=0;i<${#napiraw[@]};i+=2)); do
 		napimap[${napiraw[i]}]=${napiraw[i+1]}
 	done
 	DEBUG ${napimap[@]}
-	NDCLITEST="$NDCLI --dump napi-get|grep -Fq gro-flush-timeout"
 else
-	NDCLITEST=false
+	PERNAPI=false
 fi
 
 if [ "$1" = "irqmap" ]; then
@@ -118,7 +118,7 @@ esac
 
 DEBUG ${irqmap[@]}
 
-# sanitychecking
+# plausibility check
 [ $qcnttotal -eq ${#irqmap[@]} ] || error inconsistency between qcnttotal $qcnttotal and size of irqmap ${#irqmap[@]}
 
 # process command-line arguments
@@ -192,23 +192,23 @@ while [ $# -gt 0 ]; do
 		[ "$1" = "na" ] || COALESCING+=" tx-frames-irq $1"; shift
 		[ "$1" = "na" ] || COALESCING+=" cqe-mode-rx $1"; shift
 		[ "$1" = "na" ] || COALESCING+=" cqe-mode-tx $1"; shift
-		sudo ethtool -C $dev $COALESCING
+		[ -z "$COALESCING" ] || sudo ethtool -C $dev $COALESCING
 		;;
 	setpoll)
 		[ $# -lt 4 ] && usage
-		if eval "$NDCLITEST"; then
+		$PERNAPI && {
 			for ((q=0;q<$qcntcurr;q++)); do
 				nid=${napimap[q]}
 				sudo $NDCLI --do napi-set --json="{\"id\": $nid, \"gro-flush-timeout\": $2, \"defer-hard-irqs\": $3}" > /dev/null
 				sudo $NDCLI --do napi-set --json="{\"id\": $nid, \"irq-suspend-timeout\": $4}" >/dev/null 2>&1 || echo "irq-suspend-timeout not available"
 			done
-		else
+		} || {
 			sudo sh -c "echo $2 > /sys/class/net/$dev/gro_flush_timeout"
 			sudo sh -c "echo $3 > /sys/class/net/$dev/napi_defer_hard_irqs"
 #			[ -e /sys/class/net/$dev/irq_suspend_timeout ] && \
 #				sudo sh -c "echo $4 > /sys/class/net/$dev/irq_suspend_timeout" || \
 #				echo "irq_suspend_timeout not available"
-		fi
+		}
 		shift 4;;
 	show)
 		# TODO: also show IRQ routing...
@@ -223,7 +223,7 @@ while [ $# -gt 0 ]; do
 #		[ -e /sys/class/net/$dev/irq_suspend_timeout ] && \
 #			cat /sys/class/net/$dev/irq_suspend_timeout || \
 #			echo not available
-		eval "$NDCLITEST" && $NDCLI --dump napi-get --json="{\"ifindex\": $ifx}"|jq .
+		$PERNAPI && $NDCLI --dump napi-get --json="{\"ifindex\": $ifx}"|jq .
 		shift;;
 	*) error unknown operation $1;;
 	esac
