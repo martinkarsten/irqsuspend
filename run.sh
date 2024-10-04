@@ -114,7 +114,7 @@ cleanup() {
 	pdsh -w $DRIVER,$CLIENTS killall -q -9 mutilate 2>/dev/null
 	ssh $SERVER killall -q -9 memcached 2>/dev/null
 	ssh $SERVER sudo killall -q -9 bpftrace 2>/dev/null
-	ssh $SERVER ./irq.sh $IFACE setq $qdef setcoalesce $COALESCEd setpoll 0 0 0
+	ssh $SERVER ./irq.sh $IFACE setq $qdef setirq1 0-$(($(nproc)-1)) 0 $qdef setcoalesce $COALESCEd setpoll 0 0 0
 }
 
 check_last_file() {
