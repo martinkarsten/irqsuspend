@@ -1,6 +1,7 @@
 #!/bin/bash
 function usage() {
 	echo "usage: $(basename $0) [-c|-s] <file> <text> <avg col> [<weight col>]"
+	echo "       $(basename $0) [-s] cpq|ipq"
 	echo "       $(basename $0)  -q|-r|-t [<sort row>]"
 	exit 0
 }
@@ -8,14 +9,19 @@ function usage() {
 [ $# -lt 1 ] && usage
 
 OUTPUT=qps
-SORT="cat"
+
+case $1 in
+	-s) SORT="sort -n -k 3"; shift;;
+	*)  SORT=cat
+esac
 
 case $1 in
 	-c) OUTPUT=tc;           shift; [ $# -lt 3 ] && usage;;
 	-q) OUTPUT=qtable;       shift;;
 	-r) OUTPUT=rtable;       shift;;
-	-s) SORT="sort -n -k 3"; shift; [ $# -lt 3 ] && usage;;
 	-t) OUTPUT=table;        shift;;
+	cpq) OUTPUT=xpq; COUNT=cycles; shift;;
+	ipq) OUTPUT=xpq; COUNT=instructions; shift;;
 	*)  [ $# -lt 3 ] && usage;;
 esac
 
@@ -29,13 +35,15 @@ QPS=$(ls *.out|cut -f2 -d-|sort -n|uniq)
 echo $QPS|grep -q "^0 " && QPS="$(echo $QPS|cut -f2- -d' ') 0"
 
 function getnumber() {
+	pos=$1
 	case $file in
 		sar)	filter="grep -Fv CPU | awk '{print \$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11, (100 - \$12)}'";;
 		poll)	filter="tr [] ' '";;
-		*)		filter="cat";;
+		mutilate) [ $pos -eq 5 ] && { filter="cut -f2 -d'(' | cut -f1 -d' '"; pos=1; } || filter=cat;;
+		*)		filter=cat;;
 	esac
 	ls $file-$q-$t-*.out >/dev/null 2>&1 \
-	&& grep -F $text $file-$q-$t-*.out|eval "$filter"|$(dirname $0)/avg.sh $1 $2 \
+	&& grep -F $text $file-$q-$t-*.out|eval "$filter"|$(dirname $0)/avg.sh $pos $2 \
 	|| echo X
 }
 
@@ -43,7 +51,7 @@ case $OUTPUT in
 	table)
 		for t in $TC; do
 			echo $t
-			printf "%6s%8s%8s%8s%8s%8s\n" load qps avglat 95%lat 99%lat cpu
+			printf "%6s%8s%8s%8s%8s%8s%8s%8s\n" load qps avglat 95%lat 99%lat cpu cpq ipq
 			for q in $QPS; do
 				[ $q -eq 0 ] && s=MAX || s=$(($q/1000))K
 				printf "%6s" $s
@@ -52,13 +60,16 @@ case $OUTPUT in
 				file=mutilate; text=read; getnumber 9  |awk '{printf "%8.0f", $6}'
 				file=mutilate; text=read; getnumber 10 |awk '{printf "%8.0f", $6}'
 				file=sar; text=Average;   getnumber 12 |awk '{printf "%8.0f", $2}'
+				wrk=$(file=mutilate; text=QPS;       getnumber 5|awk '{print $2}')
+				echo $(file=perf; text=cycles;       getnumber 2|awk '{print $2}') $wrk |awk '{printf "%8.0f", $1 / $2}'
+				echo $(file=perf; text=instructions; getnumber 2|awk '{print $2}') $wrk |awk '{printf "%8.0f", $1 / $2}'
 				echo
 			done;echo
 		done;;
 	qtable)
 		[ $# -gt 0 ] && SORT="sort -n -k $1" || SORT="cat"
 		for q in $QPS; do
-			printf "%10s%6s%8s%8s%8s%8s%8s\n" testcase load qps avglat 95%lat 99%lat cpu
+			printf "%10s%6s%8s%8s%8s%8s%8s%8s%8s\n" testcase load qps avglat 95%lat 99%lat cpu cpq ipq
 			for t in $TC; do
 				[ $q -eq 0 ] && s=MAX || s=$(($q/1000))K
 				printf "%10s%6s" $t $s
@@ -67,6 +78,9 @@ case $OUTPUT in
 				file=mutilate; text=read; getnumber 9  |awk '{printf "%8.0f", $6}'
 				file=mutilate; text=read; getnumber 10 |awk '{printf "%8.0f", $6}'
 				file=sar; text=Average;   getnumber 12 |awk '{printf "%8.0f", $2}'
+				wrk=$(file=mutilate; text=QPS;       getnumber 5|awk '{print $2}')
+				echo $(file=perf; text=cycles;       getnumber 2|awk '{print $2}') $wrk |awk '{printf "%8.0f", $1 / $2}'
+				echo $(file=perf; text=instructions; getnumber 2|awk '{print $2}') $wrk |awk '{printf "%8.0f", $1 / $2}'
 				echo
 			done|$SORT;echo
 		done;;
@@ -92,6 +106,14 @@ case $OUTPUT in
 			printf "%6s" cpu; for q in $QPS; do
 				file=sar; text=Average;   getnumber 12 |awk '{printf "%8.0f", $2}'
 			done;echo
+			printf "%6s" cpq; for q in $QPS; do
+				wrk=$(file=mutilate; text=QPS;       getnumber 5|awk '{print $2}')
+				echo $(file=perf; text=cycles;       getnumber 1|awk '{print $2}') $wrk |awk '{printf "%8.0f", $1 / $2}'
+			done;echo
+			printf "%6s" ipq; for q in $QPS; do
+				wrk=$(file=mutilate; text=QPS;       getnumber 5|awk '{print $2}')
+				echo $(file=perf; text=instructions; getnumber 1|awk '{print $2}') $wrk |awk '{printf "%8.0f", $1 / $2}'
+			done;echo
 			echo
 		done;;
 	qps)
@@ -104,6 +126,16 @@ case $OUTPUT in
 			[ $q -eq 0 ] && s=MAX || s=$(($q/1000))K
 			printf "%12s %5s" $t $s; getnumber $*|awk '{printf "%18.3f %18.3f %6.3f %18.3f %6.3f\n", $2, $4, $5, $6, $7}'
 		done; echo; done;;
+	xpq)
+		for q in $QPS; do for t in $TC; do
+			[ $q -eq 0 ] && s=MAX || s=$(($q/1000))K
+			printf "%5s %12s" $s $t
+			for r in $(ls mutilate-$q-$t-*.out|cut -f4 -d-|cut -f1 -d.); do
+				wrk=$(grep -F QPS mutilate-$q-$t-$r.out|cut -f2 -d'(' | cut -f1 -d' ')
+				cnt=$(grep -F $COUNT perf-$q-$t-$r.out|awk '{print $1}')
+				echo $cnt $wrk |awk '{printf "%18.3f", $1 / $2}'
+			done | avg.sh 1|awk '{printf "%18.3f %18.3f %6.3f %18.3f %6.3f\n", $2, $4, $5, $6, $7}'
+		done|$SORT; echo; done;;
 	*)   echo internal error; exit 1;;
 esac
 
