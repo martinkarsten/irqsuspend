@@ -108,6 +108,7 @@ qdef=max
 
 startup() {
 	qdef=$(ssh $SERVER ./irq.sh $IFACE getq)
+	tdef=$(ssh $SERVER ./setup.sh turboget)
 }
 
 cleanup() {
@@ -115,6 +116,7 @@ cleanup() {
 	ssh $SERVER killall -q -9 memcached 2>/dev/null
 	ssh $SERVER sudo killall -q -9 bpftrace 2>/dev/null
 	ssh $SERVER ./irq.sh $IFACE setq $qdef setirq1 0-$(($(nproc)-1)) 0 $qdef setcoalesce $COALESCEd setpoll 0 0 0
+	[ -z $tdef ] || ssh $SERVER ./setup.sh turboset $tdef
 }
 
 check_last_file() {
@@ -137,7 +139,7 @@ $opt_build && {
 # copy script files
 echo "copying scripts to server and clients"
 dir=$(dirname $0)
-scp $dir/irq.sh $SERVER: >/dev/null 2>&1 &
+scp $dir/{irq,setup}.sh $SERVER: >/dev/null 2>&1 &
 for h in $DRIVER $(echo $CLIENTS|tr , ' '); do scp $dir/tcp.sh $h: >/dev/null 2>&1 & done
 wait
 
@@ -147,6 +149,8 @@ trap "exit 1" SIGHUP SIGINT SIGQUIT SIGTERM
 
 [ "$RUNS" = "clean" ] && exit 0 # exit trap cleans up
 echo "cleaning up"; cleanup
+
+ssh $SERVER ./setup.sh turboset 100 100 1
 
 # loop over test cases
 for ((run=0;run<$RUNS;run++)); do
@@ -211,7 +215,6 @@ for tc in $TESTCASES; do
 #	ssh -f $SERVER 'sudo bpftrace -e "tracepoint:napi:napi_debug { @[args->op,args->napi_id,args->cpu,args->data] = count(); }"' > napi-$file.out
 	pdsh -w $DRIVER,$CLIENTS ./tcp.sh >/dev/null
 	ssh $SERVER sudo sh -c "'echo hist:key=common_pid.execname,ret > /sys/kernel/debug/tracing/events/syscalls/sys_exit_epoll_wait/trigger'"
-#	ssh $SERVER sudo sh -c "'echo 1 > /sys/devices/system/cpu/intel_pstate/no_turbo'"
 	ssh -f $SERVER "sleep 12; taskset -c $observer sar -P $allcpuset -u ALL 1 10" > sar-$file.out
 	$opt_flamegraph && {
 		ssh -f $SERVER "sleep 12; taskset -c $observer $PERF record -C $allcpuset -F 99 -g -o perf.data -- sleep 10 >/dev/null"

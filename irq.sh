@@ -15,6 +15,7 @@ function DEBUG() {
 function usage() {
 	echo usage:
 	echo "$(basename $0) <interface> count [raw]"
+	echo "$(basename $0) <interface> getq"
 	echo "$(basename $0) <interface> irqmap"
 	echo "$(basename $0) <interface> setq <count>"
 	echo "$(basename $0) <interface> setirq1 <cpuset> <irq idx> <irq cnt>"
@@ -212,6 +213,8 @@ while [ $# -gt 0 ]; do
 		shift 4;;
 	show)
 		# TODO: also show IRQ routing...
+		uname -a
+		echo TURBO: $($(dirname $0)/setup.sh turboget)
 		ethtool -c $dev|while read line; do
 			echo $line|grep -E "on|off" || echo $line|grep -Fv "n/a"
 		done|grep -v $dev|grep -Ev "^$"

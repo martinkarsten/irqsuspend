@@ -80,7 +80,7 @@ $opt_install && {
 
 $opt_wait && {
 	echo "waiting for $target reboot"
-	until ssh -t -oPasswordAuthentication=no $target ./setup.sh 2>/dev/null; do sleep 3; done
+	until ssh -t -oPasswordAuthentication=no $target ./setup.sh boot 2>/dev/null; do sleep 3; done
 }
 
 exit 0
