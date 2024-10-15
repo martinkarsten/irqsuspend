@@ -1,8 +1,8 @@
 #!/bin/bash
 
 function error() {
-	echo
-  echo ERROR: $*
+  echo
+  echo ERROR: "$*"
   echo
   exit 1
 }
@@ -68,7 +68,7 @@ COALESCE0="na na na na na na na na na na na na"
 # client & server settings based on server name
 [ $# -gt 0 ] || usage
 case $1 in
-red01|red01vm|tilly01|tilly02|node10)
+red01|red01vm|tilly01|mlx4|tilly02|node10)
 	hostfile=$(dirname $0)/hostspec.martin.sh;;
 *)
 	hostfile=$(dirname $0)/hostspec.$1.sh;;

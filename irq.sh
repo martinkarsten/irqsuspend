@@ -3,12 +3,12 @@
 # set -x # echo command, print values
 
 function error() {
-	echo $*
+	echo "$*"
 	exit 1
 }
 
 function DEBUG() {
-#	echo $*
+#	echo "$*"
 	return
 }
 
