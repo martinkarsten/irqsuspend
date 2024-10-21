@@ -170,11 +170,20 @@ for f in irq-*; do
 done|sort -n -k 3
 
 # sort by COV to detect outliers in data set
-process.sh -s mutilate QPS 4|sort -g -k5
-process.sh -s mutilate read 10|sort -g -k5
+process.sh mutilate QPS 4|sort -g -k5
+process.sh mutilate read 10|sort -g -k5
 
 # test for empty multilate files
 for f in mutilate-*; do [ -s $f ] || echo $f; done
+
+# remove empty files
+for f in mutilate-*; do [ -s $f ] || rm *-$(echo $f|cut -f2- -d-); done
+
+# test for files with non-zero Misses
+grep -FH Misses mutilate-*.out|fgrep -Fv "= 0"|cut -f1 -d:
+
+# remove tests with Misses
+for f in $(grep -FH Misses mutilate-*.out|fgrep -Fv "= 0"|cut -f1 -d:); do rm *-$(echo $f|cut -f2- -d-); done
 
 # show CPQ (or IPQ with 'instructions' instead of 'cycles')
 for f in mutilate-*; do

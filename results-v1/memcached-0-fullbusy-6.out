@@ -1,0 +1,1 @@
+_MP_Usecs=1000 _MP_Budget=64 _MP_Prefer=1 taskset -c 16-23 /home/jdamato/memcached/memcached -t 8 -N 8 -b 16384 -c 32768 -m 10240 -o hashpower=24,no_lru_maintainer,no_lru_crawler
