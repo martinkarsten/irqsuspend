@@ -2,12 +2,15 @@
 usage() {
 	echo "$0 [options] <target> [<build host>] [<scp helper>]"; exit 1
 	echo "Options:"
-  echo "-b build (compile with lock)"
+  echo "-b build (compile/transfer with lock)"
   echo "-c compile"
   echo "-C clean first"
   echo "-d distclean first"
-  echo "-i install"
-  echo "-p prepare"
+  echo "-i install and boot"
+  echo "-p prepare target"
+  echo "-t transfer image"
+  echo "-w wait for boot"
+	echo "default: p,b,i,w"
 }
 
 opt_build=false
@@ -16,9 +19,10 @@ opt_clean=false
 opt_distclean=false
 opt_install=false
 opt_prep=false
+opt_transfer=false
 opt_wait=false
 
-while getopts "bcCdipw" option; do
+while getopts "bcCdiptw" option; do
 case $option in
 	b) opt_build=true;;
 	c) opt_compile=true;;
@@ -26,6 +30,7 @@ case $option in
 	d) opt_distclean=true;;
 	i) opt_install=true;;
 	p) opt_prep=true;;
+	t) opt_transfer=true;;
 	w) opt_wait=true;;
 	*) usage;;
 esac; done
@@ -62,13 +67,16 @@ $opt_distclean && {
 $opt_build && {
 	$opt_clean && cleanflag="-C" || unset cleanflag
 	echo "getting lock"
-	flock -F $TMPDIR/build.$buildhost $0 -c $cleanflag $target $buildhost $scphelper || exit 1
+	flock -F $TMPDIR/build.$buildhost $0 -ct $cleanflag $target $buildhost $scphelper || exit 1
 }
 
 $opt_compile && {
 	ssh -t $buildhost "[ -f config.$target ] && cp config.$target linux/net-next/.config && echo|make -C linux/net-next oldconfig" || exit 1
 	ssh -t $buildhost "sed -i -e 's/CONFIG_DEBUG_INFO;/CONFIG_DEBUG_INFO_XXX;/' linux/net-next/scripts/package/mkdebian"
 	ssh -t $buildhost 'rm -f linux/*.deb linux/linux-upstream*; make -C linux/net-next -j $(nproc) LOCALVERSION=-test bindeb-pkg' || exit 1
+}
+
+$opt_transfer && {
 	[ "$HOSTNAME" = "$scphelper" ] && unset SCPHOST || SCPHOST="ssh -t $scphelper"
 	ssh -t $target 'rm -f linux/*.deb'; $SCPHOST scp $buildhost:linux/linux-{headers,image}-*.deb $target:linux/ || exit 1
 }
