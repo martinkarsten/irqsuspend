@@ -1,6 +1,6 @@
 #!/bin/bash
 usage() {
-	echo "$0 [options] <target> [<build host>] [<scp helper>]"; exit 1
+	echo "$0 [options] <target> [<build host>] [<scp helper>]"
 	echo "Options:"
   echo "-b build (compile/transfer with lock)"
   echo "-c compile"
@@ -11,6 +11,7 @@ usage() {
   echo "-t transfer image"
   echo "-w wait for boot"
 	echo "default: p,b,i,w"
+	exit 1
 }
 
 opt_build=false
@@ -87,7 +88,7 @@ $opt_install && {
 }
 
 $opt_wait && {
-	echo "waiting for $target reboot"
+	echo "waiting for $target"
 	until ssh -t -oPasswordAuthentication=no $target ./setup.sh boot 2>/dev/null; do sleep 3; done
 }
 

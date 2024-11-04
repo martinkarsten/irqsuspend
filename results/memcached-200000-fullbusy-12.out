@@ -1,4 +1,4 @@
 _MP_Usecs=1000 _MP_Budget=64 _MP_Prefer=1 taskset -c 32-39 /home/jdamato/memcached/memcached -t 8 -N 8 -b 16384 -c 32768 -m 10240 -o hashpower=24,no_lru_maintainer,no_lru_crawler
 
-/home/jdamato/mutilate/mutilate -T 32 -s 172.25.23.32 -K fb_key -V fb_value -i fb_ia -r 1000000 -c 20 -q 200000 -d 1 -u 0.03  -a cache-sql13465.hosts.secretcdn.net -a cache-sql13475.hosts.secretcdn.net -a cache-sql13478.hosts.secretcdn.net -a cache-sql13457.hosts.secretcdn.net -a cache-sql13466.hosts.secretcdn.net -a cache-sql13439.hosts.secretcdn.net --noload -t 30
+/home/jdamato/mutilate/mutilate -T 32 -s 172.25.23.32 -K fb_key -V fb_value -i fb_ia -r 1000000 -c 20 -q 200000 -d 1 -u 0.03  -a cache-sql13465.hosts.secretcdn.net -a cache-sql13434.hosts.secretcdn.net -a cache-sql13478.hosts.secretcdn.net -a cache-sql13457.hosts.secretcdn.net -a cache-sql13466.hosts.secretcdn.net -a cache-sql13431.hosts.secretcdn.net --noload -t 30
 

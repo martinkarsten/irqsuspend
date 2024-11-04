@@ -1,14 +1,14 @@
 Trying 127.0.0.1...
 Connected to localhost.
 Escape character is '^]'.
-STAT pid 373852
-STAT uptime 86
-STAT time 1729414880
+STAT pid 447058
+STAT uptime 83
+STAT time 1730645536
 STAT version 1.6.29
 STAT libevent 2.1.12-stable
 STAT pointer_size 64
-STAT rusage_user 120.549333
-STAT rusage_system 256.178134
+STAT rusage_user 138.085791
+STAT rusage_system 297.785226
 STAT max_connections 32768
 STAT curr_connections 2
 STAT total_connections 8995
@@ -17,17 +17,17 @@ STAT connection_structures 4482
 STAT response_obj_oom 0
 STAT response_obj_count 1
 STAT response_obj_bytes 131072
-STAT read_buf_count 73
-STAT read_buf_bytes 1196032
-STAT read_buf_bytes_free 1048576
+STAT read_buf_count 78
+STAT read_buf_bytes 1277952
+STAT read_buf_bytes_free 1130496
 STAT read_buf_oom 0
 STAT reserved_fds 40
-STAT cmd_get 38787904
-STAT cmd_set 33198631
+STAT cmd_get 38790956
+STAT cmd_set 33199806
 STAT cmd_flush 0
 STAT cmd_touch 0
 STAT cmd_meta 0
-STAT get_hits 38787904
+STAT get_hits 38790956
 STAT get_misses 0
 STAT get_expired 0
 STAT get_flushed 0
@@ -46,14 +46,14 @@ STAT store_too_large 0
 STAT store_no_memory 0
 STAT auth_cmds 0
 STAT auth_errors 0
-STAT bytes_read 9779108103
-STAT bytes_written 9982934152
+STAT bytes_read 9775518461
+STAT bytes_written 9957393331
 STAT limit_maxbytes 10737418240
 STAT accepting_conns 1
 STAT listen_disabled_num 0
 STAT time_in_listen_disabled_us 0
 STAT threads 8
-STAT conn_yields 1349394
+STAT conn_yields 1365165
 STAT hash_power_level 24
 STAT hash_bytes 134217728
 STAT hash_is_expanding 0
@@ -73,9 +73,9 @@ STAT log_watcher_sent 0
 STAT log_watchers 0
 STAT unexpected_napi_ids 0
 STAT round_robin_fallback 1
-STAT bytes 289716191
+STAT bytes 289045231
 STAT curr_items 1000000
-STAT total_items 33198631
+STAT total_items 33199806
 STAT slab_global_page_pool 0
 STAT expired_unfetched 0
 STAT evicted_unfetched 0
@@ -83,5 +83,5 @@ STAT evictions 0
 STAT reclaimed 0
 STAT crawler_reclaimed 0
 STAT crawler_items_checked 0
-STAT lrutail_reflocked 4
+STAT lrutail_reflocked 3
 END

@@ -1,8 +1,8 @@
 
  Performance counter stats for 'CPU(s) 32-39':
 
-      211204116359      cycles                                                                
-      198042153797      instructions                     #    0.94  insn per cycle            
+      216175828855      cycles                                                                
+      195841632667      instructions                     #    0.91  insn per cycle            
 
-      10.001143986 seconds time elapsed
+      10.000974402 seconds time elapsed
 

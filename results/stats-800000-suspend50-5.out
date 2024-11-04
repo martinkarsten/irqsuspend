@@ -1,14 +1,14 @@
 Trying 127.0.0.1...
 Connected to localhost.
 Escape character is '^]'.
-STAT pid 7691
+STAT pid 95240
 STAT uptime 88
-STAT time 1729420003
+STAT time 1730651295
 STAT version 1.6.29
 STAT libevent 2.1.12-stable
 STAT pointer_size 64
-STAT rusage_user 120.177776
-STAT rusage_system 215.308464
+STAT rusage_user 123.324719
+STAT rusage_system 230.315152
 STAT max_connections 32768
 STAT curr_connections 2
 STAT total_connections 8995
@@ -17,17 +17,17 @@ STAT connection_structures 4482
 STAT response_obj_oom 0
 STAT response_obj_count 1
 STAT response_obj_bytes 131072
-STAT read_buf_count 80
-STAT read_buf_bytes 1310720
-STAT read_buf_bytes_free 1163264
+STAT read_buf_count 78
+STAT read_buf_bytes 1277952
+STAT read_buf_bytes_free 1130496
 STAT read_buf_oom 0
 STAT reserved_fds 40
-STAT cmd_get 31036120
-STAT cmd_set 32958850
+STAT cmd_get 31038656
+STAT cmd_set 32958378
 STAT cmd_flush 0
 STAT cmd_touch 0
 STAT cmd_meta 0
-STAT get_hits 31036120
+STAT get_hits 31038656
 STAT get_misses 0
 STAT get_expired 0
 STAT get_flushed 0
@@ -46,14 +46,14 @@ STAT store_too_large 0
 STAT store_no_memory 0
 STAT auth_cmds 0
 STAT auth_errors 0
-STAT bytes_read 9390859456
-STAT bytes_written 7987302656
+STAT bytes_read 9388217240
+STAT bytes_written 8031238520
 STAT limit_maxbytes 10737418240
 STAT accepting_conns 1
 STAT listen_disabled_num 0
 STAT time_in_listen_disabled_us 0
 STAT threads 8
-STAT conn_yields 1358558
+STAT conn_yields 1359721
 STAT hash_power_level 24
 STAT hash_bytes 134217728
 STAT hash_is_expanding 0
@@ -73,9 +73,9 @@ STAT log_watcher_sent 0
 STAT log_watchers 0
 STAT unexpected_napi_ids 0
 STAT round_robin_fallback 1
-STAT bytes 288194325
+STAT bytes 289434118
 STAT curr_items 1000000
-STAT total_items 32958850
+STAT total_items 32958378
 STAT slab_global_page_pool 0
 STAT expired_unfetched 0
 STAT evicted_unfetched 0
@@ -83,5 +83,5 @@ STAT evictions 0
 STAT reclaimed 0
 STAT crawler_reclaimed 0
 STAT crawler_items_checked 0
-STAT lrutail_reflocked 0
+STAT lrutail_reflocked 1
 END

@@ -1,14 +1,14 @@
 Trying 127.0.0.1...
 Connected to localhost.
 Escape character is '^]'.
-STAT pid 31308
-STAT uptime 87
-STAT time 1729420814
+STAT pid 121643
+STAT uptime 88
+STAT time 1730652232
 STAT version 1.6.29
 STAT libevent 2.1.12-stable
 STAT pointer_size 64
-STAT rusage_user 135.902970
-STAT rusage_system 287.496786
+STAT rusage_user 134.085971
+STAT rusage_system 287.347726
 STAT max_connections 32768
 STAT curr_connections 2
 STAT total_connections 8995
@@ -17,17 +17,17 @@ STAT connection_structures 4482
 STAT response_obj_oom 0
 STAT response_obj_count 1
 STAT response_obj_bytes 131072
-STAT read_buf_count 76
-STAT read_buf_bytes 1245184
-STAT read_buf_bytes_free 1097728
+STAT read_buf_count 75
+STAT read_buf_bytes 1228800
+STAT read_buf_bytes_free 1081344
 STAT read_buf_oom 0
 STAT reserved_fds 40
-STAT cmd_get 38795166
-STAT cmd_set 33200754
+STAT cmd_get 38788091
+STAT cmd_set 33200270
 STAT cmd_flush 0
 STAT cmd_touch 0
 STAT cmd_meta 0
-STAT get_hits 38795166
+STAT get_hits 38788091
 STAT get_misses 0
 STAT get_expired 0
 STAT get_flushed 0
@@ -46,14 +46,14 @@ STAT store_too_large 0
 STAT store_no_memory 0
 STAT auth_cmds 0
 STAT auth_errors 0
-STAT bytes_read 9787466686
-STAT bytes_written 9990012440
+STAT bytes_read 9781109018
+STAT bytes_written 9966061185
 STAT limit_maxbytes 10737418240
 STAT accepting_conns 1
 STAT listen_disabled_num 0
 STAT time_in_listen_disabled_us 0
 STAT threads 8
-STAT conn_yields 1363546
+STAT conn_yields 1362689
 STAT hash_power_level 24
 STAT hash_bytes 134217728
 STAT hash_is_expanding 0
@@ -73,9 +73,9 @@ STAT log_watcher_sent 0
 STAT log_watchers 0
 STAT unexpected_napi_ids 0
 STAT round_robin_fallback 1
-STAT bytes 289491568
+STAT bytes 288906405
 STAT curr_items 1000000
-STAT total_items 33200754
+STAT total_items 33200270
 STAT slab_global_page_pool 0
 STAT expired_unfetched 0
 STAT evicted_unfetched 0
@@ -83,5 +83,5 @@ STAT evictions 0
 STAT reclaimed 0
 STAT crawler_reclaimed 0
 STAT crawler_items_checked 0
-STAT lrutail_reflocked 2
+STAT lrutail_reflocked 3
 END

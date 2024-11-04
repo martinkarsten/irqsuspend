@@ -1,14 +1,14 @@
 Trying 127.0.0.1...
 Connected to localhost.
 Escape character is '^]'.
-STAT pid 52249
-STAT uptime 82
-STAT time 1729456410
+STAT pid 238448
+STAT uptime 86
+STAT time 1730692134
 STAT version 1.6.29
 STAT libevent 2.1.12-stable
 STAT pointer_size 64
-STAT rusage_user 126.579982
-STAT rusage_system 341.632211
+STAT rusage_user 130.205792
+STAT rusage_system 341.790206
 STAT max_connections 32768
 STAT curr_connections 2
 STAT total_connections 8995
@@ -17,17 +17,17 @@ STAT connection_structures 4482
 STAT response_obj_oom 0
 STAT response_obj_count 1
 STAT response_obj_bytes 131072
-STAT read_buf_count 59
-STAT read_buf_bytes 966656
-STAT read_buf_bytes_free 819200
+STAT read_buf_count 54
+STAT read_buf_bytes 884736
+STAT read_buf_bytes_free 737280
 STAT read_buf_oom 0
 STAT reserved_fds 40
-STAT cmd_get 38794944
-STAT cmd_set 33200075
+STAT cmd_get 38786681
+STAT cmd_set 33197731
 STAT cmd_flush 0
 STAT cmd_touch 0
 STAT cmd_meta 0
-STAT get_hits 38794944
+STAT get_hits 38786681
 STAT get_misses 0
 STAT get_expired 0
 STAT get_flushed 0
@@ -46,14 +46,14 @@ STAT store_too_large 0
 STAT store_no_memory 0
 STAT auth_cmds 0
 STAT auth_errors 0
-STAT bytes_read 9775193570
-STAT bytes_written 9996200158
+STAT bytes_read 9782405391
+STAT bytes_written 9966109431
 STAT limit_maxbytes 10737418240
 STAT accepting_conns 1
 STAT listen_disabled_num 0
 STAT time_in_listen_disabled_us 0
 STAT threads 8
-STAT conn_yields 1378180
+STAT conn_yields 1379135
 STAT hash_power_level 24
 STAT hash_bytes 134217728
 STAT hash_is_expanding 0
@@ -73,9 +73,9 @@ STAT log_watcher_sent 0
 STAT log_watchers 0
 STAT unexpected_napi_ids 0
 STAT round_robin_fallback 1
-STAT bytes 289754559
+STAT bytes 289496661
 STAT curr_items 1000000
-STAT total_items 33200075
+STAT total_items 33197731
 STAT slab_global_page_pool 0
 STAT expired_unfetched 0
 STAT evicted_unfetched 0
@@ -83,5 +83,5 @@ STAT evictions 0
 STAT reclaimed 0
 STAT crawler_reclaimed 0
 STAT crawler_items_checked 0
-STAT lrutail_reflocked 3
+STAT lrutail_reflocked 2
 END
