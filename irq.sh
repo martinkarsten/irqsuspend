@@ -12,9 +12,21 @@ function DEBUG() {
 	return
 }
 
+function checkconfig() {
+  [ -f $cfgfile ] && grep -q "$*$" $cfgfile && return 0
+  touch $cfgfile
+  grep -q "$1 " $cfgfile && {
+    sed -i -e "s/$1.*/$*/" $cfgfile
+  } || {
+    echo "$*" >> $cfgfile
+  }
+  return 1
+}
+
 function usage() {
 	echo usage:
 	echo "$(basename $0) <interface> count [raw]"
+	echo "$(basename $0) <interface> clean"
 	echo "$(basename $0) <interface> getq"
 	echo "$(basename $0) <interface> irqmap"
 	echo "$(basename $0) <interface> setq <count>"
@@ -30,6 +42,9 @@ function usage() {
 
 dev=$1; shift
 [ -d /sys/class/net/$dev ] || error device $dev not found
+
+cfgfile=$HOME/.irq.sh.config.$HOSTNAME.$dev
+prevfile=$HOME/.irq.sh.previous.$HOSTNAME.$dev
 
 # obtain index list of irqs associated with device
 irqlist=($(ls /sys/class/net/$dev/device/msi_irqs|sort -n))
@@ -130,8 +145,12 @@ while [ $# -gt 0 ]; do
 	count)
 		count=true; shift
 		[ "$1" = "raw" ] && { raw=true; shift; };;
+	clean)
+		rm -f $cfgfile
+		shift 1;;
 	setq)
 		[ $# -lt 2 ] && usage
+		checkconfig $1 $2 && { shift 2; continue; }
 		[ "$2" = "max" ] && cnt=$qcnttotal || cnt=$2
 		case $driver in
 		mlx5_core)
@@ -147,6 +166,7 @@ while [ $# -gt 0 ]; do
 		shift 1;;
 	setirq1)
 		[ $# -lt 4 ] && usage
+		checkconfig $1 $2 $3 $4 && { shift 4; continue; }
 		[ $4 -gt 0 ] && max=$(($3 + $4)) || max=$irqtotal
 		idx=$3
 		while [ $idx -lt $max ]; do
@@ -172,6 +192,7 @@ while [ $# -gt 0 ]; do
 		shift 4;;
 	setirqN)
 		[ $# -lt 4 ] && usage
+		checkconfig $1 $2 $3 $4 && { shift 4; continue; }
 		[ $4 -gt 0 ] && max=$(($3 + $4)) || max=$irqtotal
 		for ((idx=$3;idx<$max;idx++)); do
 			[ -r /proc/irq/${irqlist[idx]}/smp_affinity_list ] || continue;
@@ -179,8 +200,9 @@ while [ $# -gt 0 ]; do
 		done
 		shift 4;;
 	setcoalesce)
-		[ $# -lt 13 ] && usage; shift
-		COALESCING=""
+		[ $# -lt 13 ] && usage
+		checkconfig $1 $2 $3 $4 $5 $6 $7 $8 $9 ${10} ${11} ${12} ${13} && { shift 13; continue; }
+		COALESCING=""; shift
 		[ "$1" = "na" ] || COALESCING+=" adaptive-rx $1"; shift
 		[ "$1" = "na" ] || COALESCING+=" adaptive-tx $1"; shift
 		[ "$1" = "na" ] || COALESCING+=" rx-usecs $1"; shift
@@ -197,6 +219,7 @@ while [ $# -gt 0 ]; do
 		;;
 	setpoll)
 		[ $# -lt 4 ] && usage
+		checkconfig $1 $2 $3 $4 && { shift 4; continue; }
 		$PERNAPI && {
 			for ((q=0;q<$qcntcurr;q++)); do
 				nid=${napimap[q]}
@@ -233,8 +256,6 @@ while [ $# -gt 0 ]; do
 done
 
 $count || exit 0
-
-prevfile=$HOME/.irq.sh.previous.$HOSTNAME.$dev
 
 # setup current counters
 for ((idx=0;idx<$irqtotal;idx++)); do

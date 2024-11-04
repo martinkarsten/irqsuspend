@@ -107,7 +107,7 @@ killproc() {
 qdef=max
 
 startup() {
-	qdef=$(ssh $SERVER ./irq.sh $IFACE getq)
+	qdef=$(ssh $SERVER ./irq.sh $IFACE clean getq)
 	tdef=$(ssh $SERVER ./setup.sh turboget)
 }
 
@@ -209,9 +209,11 @@ for tc in $TESTCASES; do
 	ssh $SERVER NDCLI=\"$NDCLI\" ./irq.sh $IFACE setq $irqs setirqN $OTHER 0 0 setirq1 $irqcpuset 0 $irqs setcoalesce $COALESCING setpoll $POLLVAR show > setup-$file.out
 	printf "$MEMVAR taskset -c $runcpuset $MEMCACHED $MEMSPEC\n\n" > memcached-$file.out
 	ssh -f $SERVER "$MEMVAR taskset -c $runcpuset $MEMCACHED $MEMSPEC"
-	(pdsh -w $CLIENTS $MUTILATE -A 2>/dev/null &); sleep 1
-	echo -n "LOAD "; timeout 30s ssh $DRIVER $MUTILATE $MUTARGS --loadonly
-	echo -n "WARM "; timeout 30s ssh $DRIVER $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t 10 >/dev/null 2>&1 # warmup
+	echo -n "SERVER "; timeout 30s ssh $SERVER "while ! socat /dev/null TCP:localhost:11211 2>/dev/null; do sleep 1; done" || echo "SERVER FAILED" >> memcached-$file.out
+	pdsh -w $CLIENTS $MUTILATE -A 2>/dev/null &
+	echo -n "AGENTS "; timeout 30s pdsh -w $CLIENTS "while ! socat /dev/null TCP:localhost:5556 2>/dev/null; do sleep 1; done" || echo "AGENTS FAILED" >> memcached-$file.out
+	echo -n "LOAD "; timeout 30s ssh $DRIVER $MUTILATE $MUTARGS --loadonly || echo "LOAD FAILED" >> memcached-$file.out
+	echo -n "WARM "; timeout 30s ssh $DRIVER $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t 10 >/dev/null 2>&1 || echo "WARMUP FAILED" >> memcached-$file.out
 	ssh -f $SERVER 'sudo bpftrace -e "tracepoint:napi:napi_poll { @[args->work] = count(); }"' > poll-$file.out
 #	ssh -f $SERVER 'sudo bpftrace -e "tracepoint:napi:napi_debug { @[args->op,args->napi_id,args->cpu,args->data] = count(); }"' > napi-$file.out
 	pdsh -w $DRIVER,$CLIENTS ./tcp.sh >/dev/null
