@@ -60,9 +60,9 @@ case $OUTPUT in
 				file=mutilate; text=read; getnumber 9  |awk '{printf "%8.0f", $6}'
 				file=mutilate; text=read; getnumber 10 |awk '{printf "%8.0f", $6}'
 				file=sar; text=Average;   getnumber 12 |awk '{printf "%8.0f", $2}'
-				wrk=$(file=mutilate; text=QPS;       getnumber 5|awk '{print $2}')
-				echo $(file=perf; text=cycles;       getnumber 2|awk '{print $2}') $wrk |awk '{printf "%8.0f", $1 / $2}'
-				echo $(file=perf; text=instructions; getnumber 2|awk '{print $2}') $wrk |awk '{printf "%8.0f", $1 / $2}'
+				wrk=$(file=mutilate; text=QPS; getnumber 5|awk '{print $2}')
+				file=perf; text=cycles;        getnumber 2|awk -v wrk=$wrk '{printf "%8.0f", $2 / wrk}'
+				file=perf; text=instructions;  getnumber 2|awk -v wrk=$wrk '{printf "%8.0f", $2 / wrk}'
 				echo
 			done;echo
 		done;;
@@ -78,9 +78,9 @@ case $OUTPUT in
 				file=mutilate; text=read; getnumber 9  |awk '{printf "%8.0f", $6}'
 				file=mutilate; text=read; getnumber 10 |awk '{printf "%8.0f", $6}'
 				file=sar; text=Average;   getnumber 12 |awk '{printf "%8.0f", $2}'
-				wrk=$(file=mutilate; text=QPS;       getnumber 5|awk '{print $2}')
-				echo $(file=perf; text=cycles;       getnumber 2|awk '{print $2}') $wrk |awk '{printf "%8.0f", $1 / $2}'
-				echo $(file=perf; text=instructions; getnumber 2|awk '{print $2}') $wrk |awk '{printf "%8.0f", $1 / $2}'
+				wrk=$(file=mutilate; text=QPS; getnumber 5|awk '{print $2}')
+				file=perf; text=cycles;        getnumber 2|awk -v wrk=$wrk '{printf "%8.0f", $2 / wrk}'
+				file=perf; text=instructions;  getnumber 2|awk -v wrk=$wrk '{printf "%8.0f", $2 / wrk}'
 				echo
 			done|$SORT;echo
 		done;;
@@ -107,12 +107,12 @@ case $OUTPUT in
 				file=sar; text=Average;   getnumber 12 |awk '{printf "%8.0f", $2}'
 			done;echo
 			printf "%6s" cpq; for q in $QPS; do
-				wrk=$(file=mutilate; text=QPS;       getnumber 5|awk '{print $2}')
-				echo $(file=perf; text=cycles;       getnumber 1|awk '{print $2}') $wrk |awk '{printf "%8.0f", $1 / $2}'
+				wrk=$(file=mutilate; text=QPS; getnumber 5|awk '{print $2}')
+				file=perf; text=cycles;        getnumber 2|awk -v wrk=$wrk '{printf "%8.0f", $2 / wrk}'
 			done;echo
 			printf "%6s" ipq; for q in $QPS; do
-				wrk=$(file=mutilate; text=QPS;       getnumber 5|awk '{print $2}')
-				echo $(file=perf; text=instructions; getnumber 1|awk '{print $2}') $wrk |awk '{printf "%8.0f", $1 / $2}'
+				wrk=$(file=mutilate; text=QPS; getnumber 5|awk '{print $2}')
+				file=perf; text=instructions;  getnumber 2|awk -v wrk=$wrk '{printf "%8.0f", $2 / wrk}'
 			done;echo
 			echo
 		done;;
@@ -133,9 +133,9 @@ case $OUTPUT in
 			for r in $(ls mutilate-$q-$t-*.out|cut -f4 -d-|cut -f1 -d.); do
 				wrk=$(grep -F QPS mutilate-$q-$t-$r.out|cut -f2 -d'(' | cut -f1 -d' ')
 				cnt=$(grep -F $COUNT perf-$q-$t-$r.out|awk '{print $1}')
-				echo $cnt $wrk |awk '{printf "%18.3f", $1 / $2}'
-			done | avg.sh 1|awk '{printf "%18.3f %18.3f %6.3f %18.3f %6.3f\n", $2, $4, $5, $6, $7}'
-		done|$SORT; echo; done;;
+				echo $cnt $wrk | awk '{printf "%18.3f\n", $1 / $2}'
+			done | avg.sh 1 | awk '{printf "%18.3f %18.3f %6.3f %18.3f %6.3f\n", $2, $4, $5, $6, $7}'
+		done | $SORT; echo; done;;
 	*)   echo internal error; exit 1;;
 esac
 
