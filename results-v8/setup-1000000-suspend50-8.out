@@ -1,0 +1,89 @@
+Linux cache-sql13432 6.12.0-rc5-nfoff-mitioff-susv7 #227 SMP PREEMPT_DYNAMIC Thu Nov  7 03:11:15 UTC 2024 x86_64 x86_64 x86_64 GNU/Linux
+TURBO:
+Adaptive RX: on TX: on
+rx-usecs: 8
+rx-frames: 128
+tx-usecs: 8
+tx-frames: 128
+CQE mode RX: on TX: off
+Pre-set maximums:
+RX:			8192
+TX:			8192
+Current hardware settings:
+RX:			1024
+TX:			1024
+TX Push:		off
+RX Push:		off
+TCP data split:		off
+Pre-set maximums:
+Combined:	63
+Current hardware settings:
+Combined:	8
+gro_flush_timeout: 0
+napi_defer_hard_irqs: 0
+[
+  {
+    "id": 8399,
+    "ifindex": 7,
+    "irq": 545,
+    "defer-hard-irqs": 100,
+    "irq-suspend-timeout": 20000000,
+    "gro-flush-timeout": 50000
+  },
+  {
+    "id": 8398,
+    "ifindex": 7,
+    "irq": 544,
+    "defer-hard-irqs": 100,
+    "irq-suspend-timeout": 20000000,
+    "gro-flush-timeout": 50000
+  },
+  {
+    "id": 8397,
+    "ifindex": 7,
+    "irq": 543,
+    "defer-hard-irqs": 100,
+    "irq-suspend-timeout": 20000000,
+    "gro-flush-timeout": 50000
+  },
+  {
+    "id": 8396,
+    "ifindex": 7,
+    "irq": 542,
+    "defer-hard-irqs": 100,
+    "irq-suspend-timeout": 20000000,
+    "gro-flush-timeout": 50000
+  },
+  {
+    "id": 8395,
+    "ifindex": 7,
+    "irq": 541,
+    "defer-hard-irqs": 100,
+    "irq-suspend-timeout": 20000000,
+    "gro-flush-timeout": 50000
+  },
+  {
+    "id": 8394,
+    "ifindex": 7,
+    "irq": 540,
+    "defer-hard-irqs": 100,
+    "irq-suspend-timeout": 20000000,
+    "gro-flush-timeout": 50000
+  },
+  {
+    "id": 8393,
+    "ifindex": 7,
+    "irq": 539,
+    "defer-hard-irqs": 100,
+    "irq-suspend-timeout": 20000000,
+    "gro-flush-timeout": 50000
+  },
+  {
+    "id": 8392,
+    "ifindex": 7,
+    "irq": 328,
+    "defer-hard-irqs": 100,
+    "irq-suspend-timeout": 20000000,
+    "gro-flush-timeout": 50000
+  }
+]
