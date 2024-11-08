@@ -2,7 +2,7 @@
 
 # build modified libevent and memcached
 patchdir=$HOME
-git clone --depth 1 --branch 1.6.29 https://github.com/memcached/memcached.git
+git clone --depth 1 --branch 1.6.32 https://github.com/memcached/memcached.git
 cd memcached
 ./autogen.sh
 patch -p1 < $patchdir/memcached.patch

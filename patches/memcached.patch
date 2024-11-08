@@ -1,8 +1,8 @@
 diff --git a/memcached.c b/memcached.c
-index 2ec5826..736d27e 100644
+index 748e1e5..c899a8e 100644
 --- a/memcached.c
 +++ b/memcached.c
-@@ -240,6 +240,7 @@ static void settings_init(void) {
+@@ -224,6 +224,7 @@ static void settings_init(void) {
      settings.inter = NULL;
      settings.maxbytes = 64 * 1024 * 1024; /* default is 64MB */
      settings.maxconns = 1024;         /* to limit connections-related memory to about 5MB */
@@ -10,7 +10,7 @@ index 2ec5826..736d27e 100644
      settings.verbose = 0;
      settings.oldest_live = 0;
      settings.evict_to_free = 1;       /* push old items out of cache when memory runs out */
-@@ -4087,6 +4088,7 @@ static void usage(void) {
+@@ -4041,6 +4042,7 @@ static void usage(void) {
             "-M, --disable-evictions   return error on memory exhausted instead of evicting\n"
             "-c, --conn-limit=<num>    max simultaneous connections (default: %d)\n"
             "-k, --lock-memory         lock down all paged memory\n"
@@ -18,7 +18,7 @@ index 2ec5826..736d27e 100644
             "-v, --verbose             verbose (print errors/warnings while in event loop)\n"
             "-vv                       very verbose (also print client commands/responses)\n"
             "-vvv                      extremely verbose (internal state transitions)\n"
-@@ -4786,6 +4788,47 @@ static int _mc_meta_load_cb(const char *tag, void *ctx, void *data) {
+@@ -4712,6 +4714,47 @@ static int _mc_meta_load_cb(const char *tag, void *ctx, void *data) {
      return reuse_mmap;
  }
  
@@ -66,7 +66,7 @@ index 2ec5826..736d27e 100644
  int main (int argc, char **argv) {
      int c;
      bool lock_memory = false;
-@@ -4989,6 +5032,7 @@ int main (int argc, char **argv) {
+@@ -4915,6 +4958,7 @@ int main (int argc, char **argv) {
            "hiV" /* help, licence info, version */
            "r"   /* maximize core file limit */
            "v"   /* verbose */
@@ -74,7 +74,7 @@ index 2ec5826..736d27e 100644
            "d"   /* daemon mode */
            "l:"  /* interface to listen on */
            "u:"  /* user identity to run as */
-@@ -5026,6 +5070,7 @@ int main (int argc, char **argv) {
+@@ -4952,6 +4996,7 @@ int main (int argc, char **argv) {
          {"disable-evictions", no_argument, 0, 'M'},
          {"conn-limit", required_argument, 0, 'c'},
          {"lock-memory", no_argument, 0, 'k'},
@@ -82,7 +82,7 @@ index 2ec5826..736d27e 100644
          {"help", no_argument, 0, 'h'},
          {"license", no_argument, 0, 'i'},
          {"version", no_argument, 0, 'V'},
-@@ -5112,6 +5157,9 @@ int main (int argc, char **argv) {
+@@ -5043,6 +5088,9 @@ int main (int argc, char **argv) {
                  return 1;
              }
              break;
@@ -92,7 +92,7 @@ index 2ec5826..736d27e 100644
          case 'h':
              usage();
              exit(EXIT_SUCCESS);
-@@ -6015,6 +6063,7 @@ int main (int argc, char **argv) {
+@@ -5910,6 +5958,7 @@ int main (int argc, char **argv) {
      ev_config = event_config_new();
      event_config_set_flag(ev_config, EVENT_BASE_FLAG_NOLOCK);
      main_base = event_base_new_with_config(ev_config);
@@ -101,10 +101,10 @@ index 2ec5826..736d27e 100644
  #else
      /* Otherwise, use older API */
 diff --git a/memcached.h b/memcached.h
-index 45ca2f3..d592509 100644
+index 5cd7492..40c77ff 100644
 --- a/memcached.h
 +++ b/memcached.h
-@@ -471,6 +471,7 @@ struct settings {
+@@ -468,6 +468,7 @@ struct settings {
      int detail_enabled;     /* nonzero if we're collecting detailed stats */
      int reqs_per_event;     /* Maximum number of io to process on each
                                 io-event. */
@@ -112,7 +112,7 @@ index 45ca2f3..d592509 100644
      bool use_cas;
      enum protocol binding_protocol;
      int backlog;
-@@ -1075,6 +1076,8 @@ void stats_reset(void);
+@@ -1073,6 +1074,8 @@ void stats_reset(void);
  void process_stat_settings(ADD_STAT add_stats, void *c);
  void process_stats_conns(ADD_STAT add_stats, void *c);
  
@@ -122,10 +122,10 @@ index 45ca2f3..d592509 100644
  extern void setup_privilege_violations_handler(void);
  extern void drop_privileges(void);
 diff --git a/proxy_network.c b/proxy_network.c
-index 3bfbc2f..ba60e52 100644
+index 145e3ee..d4ebbb1 100644
 --- a/proxy_network.c
 +++ b/proxy_network.c
-@@ -1496,6 +1496,7 @@ void proxy_init_event_thread(proxy_event_thread_t *t, proxy_ctx_t *ctx, struct e
+@@ -1492,6 +1492,7 @@ void proxy_init_event_thread(proxy_event_thread_t *t, proxy_ctx_t *ctx, struct e
          ev_config = event_config_new();
          event_config_set_flag(ev_config, EVENT_BASE_FLAG_NOLOCK);
          t->base = event_base_new_with_config(ev_config);
@@ -134,10 +134,10 @@ index 3bfbc2f..ba60e52 100644
          if (! t->base) {
              fprintf(stderr, "Can't allocate event base\n");
 diff --git a/thread.c b/thread.c
-index 3cd0917..0120d52 100644
+index 7e545b8..f0ca7e0 100644
 --- a/thread.c
 +++ b/thread.c
-@@ -427,6 +427,7 @@ static void setup_thread(LIBEVENT_THREAD *me) {
+@@ -423,6 +423,7 @@ static void setup_thread(LIBEVENT_THREAD *me) {
      ev_config = event_config_new();
      event_config_set_flag(ev_config, EVENT_BASE_FLAG_NOLOCK);
      me->base = event_base_new_with_config(ev_config);
@@ -145,7 +145,7 @@ index 3cd0917..0120d52 100644
      event_config_free(ev_config);
  #else
      me->base = event_init();
-@@ -533,7 +534,13 @@ static void *worker_libevent(void *arg) {
+@@ -529,7 +530,13 @@ static void *worker_libevent(void *arg) {
          }
      }
  #else
