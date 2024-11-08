@@ -167,12 +167,13 @@ while [ $# -gt 0 ]; do
 	setirq1)
 		[ $# -lt 4 ] && usage
 		checkconfig $1 $2 $3 $4 && { shift 4; continue; }
+		[ "$2" = "all" ] && cset="0-$(expr $(nproc) - 1)" || cset=$2
 		[ $4 -gt 0 ] && max=$(($3 + $4)) || max=$irqtotal
 		idx=$3
 		while [ $idx -lt $max ]; do
-			for range in $(echo $2|tr , ' '); do
+			for range in $(echo $cset|tr , ' '); do
 				low=$(echo $range|cut -f1 -d-)
-			  high=$(echo $range|cut -f2 -d-)
+				high=$(echo $range|cut -f2 -d-)
 				for ((cpu=$low;cpu<=$high;cpu++)); do
 					# route each irq to a dedicated core (linear assignment)
 					sudo sh -c "echo $cpu > /proc/irq/${irqlist[${irqmap[idx]}]}/smp_affinity_list"

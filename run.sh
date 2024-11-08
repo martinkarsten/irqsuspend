@@ -108,6 +108,7 @@ qdef=max
 
 startup() {
 	qdef=$(ssh $SERVER ./irq.sh $IFACE clean getq)
+	[ -z "$qdef" ] && error problem with running irq.sh on $SERVER
 	tdef=$(ssh $SERVER ./setup.sh turboget)
 }
 
@@ -115,7 +116,7 @@ cleanup() {
 	pdsh -w $DRIVER,$CLIENTS killall -q -9 mutilate 2>/dev/null
 	ssh $SERVER killall -q -9 memcached 2>/dev/null
 	ssh $SERVER sudo killall -q -9 bpftrace 2>/dev/null
-	ssh $SERVER ./irq.sh $IFACE setq $qdef setirq1 0-$(($(nproc)-1)) 0 $qdef setcoalesce $COALESCEd setpoll 0 0 0
+	ssh $SERVER ./irq.sh $IFACE setq $qdef setirq1 all 0 $qdef setcoalesce $COALESCEd setpoll 0 0 0
 	[ -z $tdef ] || ssh $SERVER ./setup.sh turboset $tdef
 }
 
