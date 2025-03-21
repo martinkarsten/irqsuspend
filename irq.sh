@@ -67,8 +67,15 @@ DEBUG QUEUEs: $rxtotal $txtotal $cbtotal $qcnttotal $rxcurr $txcurr $cbcurr $qcn
 if [[ $NDCLI ]]; then
 	$NDCLI --dump napi-get|grep -Fq gro-flush-timeout && PERNAPI=true || PERNAPI=false
 	ifx=$(ip l show $dev|head -1|cut -f1 -d:)
-	napiraw=($($NDCLI --dump queue-get --json="{\"ifindex\": $ifx}"|jq '.[] | .id,."napi-id"'))
-	for ((i=0;i<${#napiraw[@]};i+=2)); do
+	napiraw=($($NDCLI --dump queue-get --json="{\"ifindex\": $ifx}"|jq '.[] | .id,."napi-id",.type'))
+	for ((i=0;i<${#napiraw[@]};i+=3)); do
+		if [[ ${napiraw[i+1]} == "null" ]]; then
+			if [[ ${napiraw[i+2]} == "\"rx\"" ]]; then
+				echo "RX queue $i with NAPI ID null"
+				exit 1
+			fi
+	continue
+		fi
 		napimap[${napiraw[i]}]=${napiraw[i+1]}
 	done
 	DEBUG ${napimap[@]}
@@ -110,6 +117,8 @@ mlx4_en|mlx5_core)
 		case $HOSTNAME in
 		red01vm)
 			irqmap=( 1  2  3  4  5  6);;
+		green11)
+			irqmap=( 7  8  9 10 11 12  1  2  3  4  5  6);;
 		*)
 			irqmap=( 7  8  9 10 11 12 19 20 21 22 23 24  1  2  3  4  5  6 13 14 15 16 17 18);;
 		esac;;
@@ -153,7 +162,7 @@ while [ $# -gt 0 ]; do
 		checkconfig $1 $2 && { shift 2; continue; }
 		[ "$2" = "max" ] && cnt=$qcnttotal || cnt=$2
 		case $driver in
-		mlx5_core)
+		mlx5_core|virtio_net)
 			sudo ethtool -L $dev combined $cnt;;
 		mlx4_en)
 			sudo ethtool -L $dev rx $cnt;;
@@ -181,7 +190,12 @@ while [ $# -gt 0 ]; do
 					sudo sh -c "echo 0 > /sys/class/net/$dev/queues/rx-$idx/rps_cpus"
 					sudo sh -c "echo 0 > /sys/class/net/$dev/queues/rx-$idx/rps_flow_cnt"
 					sudo sh -c "echo 0 > /sys/class/net/$dev/queues/tx-$idx/xps_rxqs"
-					str=$(printf '%X' $((2 ** $(($cpu % 32)))))
+					case $driver in
+					virtio_net)
+						str=0;; # disable XPS for virtio
+					*)
+						str=$(printf '%X' $((2 ** $(($cpu % 32)))));;
+					esac
 					for ((tmp=$cpu;tmp>=32;tmp-=32)); do str+=",00000000"; done
 					sudo sh -c "echo $str > /sys/class/net/$dev/queues/tx-$idx/xps_cpus"
 					((idx+=1))

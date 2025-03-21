@@ -19,7 +19,7 @@ opt_compile=false
 opt_clean=false
 opt_distclean=false
 opt_install=false
-opt_prep=false
+opt_prepare=false
 opt_transfer=false
 opt_wait=false
 
@@ -30,14 +30,14 @@ case $option in
 	C) opt_clean=true;;
 	d) opt_distclean=true;;
 	i) opt_install=true;;
-	p) opt_prep=true;;
+	p) opt_prepare=true;;
 	t) opt_transfer=true;;
 	w) opt_wait=true;;
 	*) usage;;
 esac; done
 
 [ $OPTIND -eq 1 ] && {
-	opt_prep=true
+	opt_prepare=true
 	opt_build=true
 	opt_install=true
 	opt_wait=true
@@ -51,7 +51,7 @@ esac; done
 
 dir=$(dirname $0)
 
-$opt_prep && {
+$opt_prepare && {
 	files=$dir/setup.sh
 	[ -f $dir/servercfg/setup_$target.sh ] && files+=" $dir/servercfg/setup_$target.sh"
 	scp $files $target:
@@ -77,7 +77,7 @@ $opt_compile && {
 	ssh -t $buildhost 'rm -f linux/*.deb linux/linux-upstream*; make -C linux/net-next -j $(nproc) LOCALVERSION=-test bindeb-pkg' || exit 1
 }
 
-$opt_transfer && {
+$opt_transfer && [ "$buildhost" != "$target" ] && {
 	[ "$HOSTNAME" = "$scphelper" ] && unset SCPHOST || SCPHOST="ssh -t $scphelper"
 	ssh -t $target 'rm -f linux/*.deb'; $SCPHOST scp $buildhost:linux/linux-{headers,image}-*.deb $target:linux/ || exit 1
 }

@@ -15,6 +15,7 @@ function usage() {
   echo "-f                 create flamegraph"
   echo "-h                 hyperthread mode"
   echo "-n num             connections per mutilate thread"
+  echo "-p ev1,ev2,...     perf events"
   echo "-q qps1,qps2,...   load rates"
   echo "-t test1,test2,... test cases"
   exit 0
@@ -45,15 +46,17 @@ unset arg_cores
 opt_flamegraph=false
 opt_ht=false
 unset arg_conns
+opt_events="cycles,instructions"
 unset arg_qps
 TESTCASES=$(show_testcases)
-while getopts "bc:fhn:q:t:" option; do
+while getopts "bc:fhn:p:q:t:" option; do
 case $option in
 	b) opt_build=true;;
 	c) arg_cores=${OPTARG};;
 	f) opt_flamegraph=true;;
 	h) opt_ht=true;;
 	n) arg_conns=${OPTARG};;
+	p) opt_events=${OPTARG};;
 	q) arg_qps=$(echo ${OPTARG}|tr , ' ');;
 	t) TESTCASES=$(echo ${OPTARG}|tr , ' ');;
 	*) usage;;
@@ -170,6 +173,7 @@ for tc in $TESTCASES; do
 		napibusy)   CL=d; HTSPLIT=false; POLLVAR="  200000 100        0"; MEMVAR="_MP_Usecs=64   _MP_Budget=64 _MP_Prefer=1";;
 		fullbusy)   CL=d; HTSPLIT=false; POLLVAR=" 5000000 100        0"; MEMVAR="_MP_Usecs=1000 _MP_Budget=64 _MP_Prefer=1"; MEMSPEC+=" -y";;
 		suspend0)   CL=d; HTSPLIT=false; POLLVAR="       0   0 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
+#		suspend1)   CL=d; HTSPLIT=false; POLLVAR="    1000   1 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
 		suspend10)  CL=d; HTSPLIT=false; POLLVAR="   10000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
 		suspend20)  CL=d; HTSPLIT=false; POLLVAR="   20000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
 		suspend50)  CL=d; HTSPLIT=false; POLLVAR="   50000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
@@ -223,7 +227,7 @@ for tc in $TESTCASES; do
 	$opt_flamegraph && {
 		ssh -f $SERVER "sleep 12; taskset -c $observer $PERF record -C $allcpuset -F 99 -g -o perf.data -- sleep 10 >/dev/null"
 	} || {
-		ssh -f $SERVER "sleep 12; taskset -c $observer $PERF stat -C $allcpuset -e cycles,instructions --no-big-num -- sleep 10 2>&1" > perf-$file.out
+		ssh -f $SERVER "sleep 12; taskset -c $observer $PERF stat -C $allcpuset -e $opt_events --no-big-num -- sleep 10 2>&1" > perf-$file.out
 	}
 	ssh $SERVER ./irq.sh $IFACE count > /dev/null
 	printf "$MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t 30\n\n" >> memcached-$file.out
