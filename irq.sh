@@ -32,7 +32,7 @@ function usage() {
 	echo "$(basename $0) <interface> setq <count>"
 	echo "$(basename $0) <interface> setirq1 <cpuset> <irq idx> <irq cnt>"
 	echo "$(basename $0) <interface> setirqN <cpuset> <irq idx> <irq cnt>"
-	echo "$(basename $0) <interface> setcoalesce <adaptive-rx> <adaptive-tx> <rx-usecs> <rx-frames> <rx-usecs-irq> <rx-frames-irq> <tx-usecs> <tx-frames> <tx-usecs-irq> <tx-frames-irq> <cqe-mode-rx> <cqe-mode-tx?"
+	echo "$(basename $0) <interface> setcoalesce <adaptive-rx> <adaptive-tx> <rx-usecs> <rx-frames> <rx-usecs-irq> <rx-frames-irq> <tx-usecs> <tx-frames> <tx-usecs-irq> <tx-frames-irq> <cqe-mode-rx> <cqe-mode-tx>"
 	echo "$(basename $0) <interface> setpoll <gro timeout> <defer irqs> <suspend timeout>"
 	echo "$(basename $0) <interface> show"
 	exit 0
@@ -61,7 +61,7 @@ txcurr=$(ethtool -l $dev|grep -F TX:      |tail -1|awk '{print $2}'); [ "$txcurr
 cbcurr=$(ethtool -l $dev|grep -F Combined:|tail -1|awk '{print $2}'); [ "$cbcurr" = "n/a" ] && cbcurr=0
 qcntcurr=$(($rxcurr + $cbcurr))
 DEBUG QUEUEs: $rxtotal $txtotal $cbtotal $qcnttotal $rxcurr $txcurr $cbcurr $qcntcurr
-[ $qcnttotal -le $irqtotal ] || error "qcnttotal $qcnttotal > irqtotal $irqtotal"
+[ $qcntcurr -le $irqtotal ]  || error "qcntcurr $qcntcurr > irqtotal $irqtotal"
 [ $qcntcurr -le $qcnttotal ] || error "qcntcurr $qcntcurr > qcnttotal $qcnttotal"
 
 if [[ $NDCLI ]]; then
@@ -106,6 +106,8 @@ DEBUG $driver
 
 # use hard-coded irqmap
 case $driver in
+ice)
+	irqmap=( 2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25);;
 mlx4_en|mlx5_core)
 	pci_id=$(basename $(readlink /sys/class/net/$dev/device))
 	part=$(sudo lspci -vv -s $pci_id | fgrep Part | awk '{print $4}')
@@ -122,7 +124,7 @@ mlx4_en|mlx5_core)
 		*)
 			irqmap=( 7  8  9 10 11 12 19 20 21 22 23 24  1  2  3  4  5  6 13 14 15 16 17 18);;
 		esac;;
-	MCX4121A-ACAT)         # mlx5_core: tilly01
+	MCX4121A-ACAT|MCX4111A-ACAT|MCX623102AN-GDAT)         # mlx5_core: tilly01, tilly02, tilly03
 		irqmap=( 1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32);;
 	MCX515A-CCAT)          # mlx5_core: intrepid node10
 		irqmap=( 1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20);;
@@ -162,7 +164,7 @@ while [ $# -gt 0 ]; do
 		checkconfig $1 $2 && { shift 2; continue; }
 		[ "$2" = "max" ] && cnt=$qcnttotal || cnt=$2
 		case $driver in
-		mlx5_core|virtio_net)
+		ice|mlx5_core|virtio_net)
 			sudo ethtool -L $dev combined $cnt;;
 		mlx4_en)
 			sudo ethtool -L $dev rx $cnt;;
@@ -217,20 +219,25 @@ while [ $# -gt 0 ]; do
 	setcoalesce)
 		[ $# -lt 13 ] && usage
 		checkconfig $1 $2 $3 $4 $5 $6 $7 $8 $9 ${10} ${11} ${12} ${13} && { shift 13; continue; }
-		COALESCING=""; shift
-		[ "$1" = "na" ] || COALESCING+=" adaptive-rx $1"; shift
-		[ "$1" = "na" ] || COALESCING+=" adaptive-tx $1"; shift
-		[ "$1" = "na" ] || COALESCING+=" rx-usecs $1"; shift
-		[ "$1" = "na" ] || COALESCING+=" rx-frames $1"; shift
-		[ "$1" = "na" ] || COALESCING+=" rx-usecs-irq $1"; shift
-		[ "$1" = "na" ] || COALESCING+=" rx-frames-irq $1"; shift
-		[ "$1" = "na" ] || COALESCING+=" tx-usecs $1"; shift
-		[ "$1" = "na" ] || COALESCING+=" tx-frames $1"; shift
-		[ "$1" = "na" ] || COALESCING+=" tx-usecs-irq $1"; shift
-		[ "$1" = "na" ] || COALESCING+=" tx-frames-irq $1"; shift
-		[ "$1" = "na" ] || COALESCING+=" cqe-mode-rx $1"; shift
-		[ "$1" = "na" ] || COALESCING+=" cqe-mode-tx $1"; shift
-		[ -z "$COALESCING" ] || sudo ethtool -C $dev $COALESCING
+		unset COALESCINGr COALESCINGt COALESCINGc COALESCINGm; shift
+		[ "$1" = "na" ] || COALESCINGr+=" adaptive-rx $1"; shift
+		[ "$1" = "na" ] || COALESCINGt+=" adaptive-tx $1"; shift
+		[ "$1" = "na" ] || COALESCINGc+=" rx-usecs $1"; shift
+		[ "$1" = "na" ] || COALESCINGc+=" rx-frames $1"; shift
+		[ "$1" = "na" ] || COALESCINGc+=" rx-usecs-irq $1"; shift
+		[ "$1" = "na" ] || COALESCINGc+=" rx-frames-irq $1"; shift
+		[ "$1" = "na" ] || COALESCINGc+=" tx-usecs $1"; shift
+		[ "$1" = "na" ] || COALESCINGc+=" tx-frames $1"; shift
+		[ "$1" = "na" ] || COALESCINGc+=" tx-usecs-irq $1"; shift
+		[ "$1" = "na" ] || COALESCINGc+=" tx-frames-irq $1"; shift
+		[ "$1" = "na" ] || COALESCINGm+=" cqe-mode-rx $1"; shift
+		[ "$1" = "na" ] || COALESCINGm+=" cqe-mode-tx $1"; shift
+		[ -z "$COALESCINGr" ] || sudo ethtool -C $dev adaptive-rx off
+		[ -z "$COALESCINGt" ] || sudo ethtool -C $dev adaptive-tx off
+		[ -z "$COALESCINGc" ] || sudo ethtool -C $dev $COALESCINGc
+		[ -z "$COALESCINGr" ] || sudo ethtool -C $dev $COALESCINGr
+		[ -z "$COALESCINGt" ] || sudo ethtool -C $dev $COALESCINGt
+		[ -z "$COALESCINGm" ] || sudo ethtool -C $dev $COALESCINGm
 		;;
 	setpoll)
 		[ $# -lt 4 ] && usage
@@ -265,6 +272,7 @@ while [ $# -gt 0 ]; do
 #			cat /sys/class/net/$dev/irq_suspend_timeout || \
 #			echo not available
 		$PERNAPI && $NDCLI --dump napi-get --json="{\"ifindex\": $ifx}"|jq .
+		cat /proc/cmdline
 		shift;;
 	*) error unknown operation $1;;
 	esac

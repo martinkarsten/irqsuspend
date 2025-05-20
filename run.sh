@@ -71,7 +71,7 @@ COALESCE0="na na na na na na na na na na na na"
 # client & server settings based on server name
 [ $# -gt 0 ] || usage
 case $1 in
-red01|red01vm|tilly01|mlx4|tilly02|node10)
+husky02|red01|red01vm|tilly01|mlx4|tilly02|node10)
 	hostfile=$(dirname $0)/hostspec.martin.sh;;
 *)
 	hostfile=$(dirname $0)/hostspec.$1.sh;;
@@ -119,8 +119,9 @@ cleanup() {
 	pdsh -w $DRIVER,$CLIENTS killall -q -9 mutilate 2>/dev/null
 	ssh $SERVER killall -q -9 memcached 2>/dev/null
 	ssh $SERVER sudo killall -q -9 bpftrace 2>/dev/null
-	ssh $SERVER ./irq.sh $IFACE setq $qdef setirq1 all 0 $qdef setcoalesce $COALESCEd setpoll 0 0 0
-	[ -z $tdef ] || ssh $SERVER ./setup.sh turboset $tdef
+	ssh $SERVER ./irq.sh $IFACE setq $qdef
+	ssh $SERVER ./irq.sh $IFACE setirq1 all 0 $qdef setcoalesce $COALESCEd setpoll 0 0 0
+	[ -z "$tdef" ] || ssh $SERVER ./setup.sh turboset $tdef
 }
 
 check_last_file() {
@@ -166,6 +167,7 @@ for tc in $TESTCASES; do
 	conns=$CONNS; cpus=$CORES
 	case "$tc" in # testcases start
 		base)       CL=d; HTSPLIT=true;  POLLVAR="       0   0        0"; MEMVAR="";;
+		base1c)     CL=x; HTSPLIT=true;  POLLVAR="       0   0        0"; MEMVAR="";;
 		defer10)    CL=d; HTSPLIT=true;  POLLVAR="   10000 100        0"; MEMVAR="";;
 		defer20)    CL=d; HTSPLIT=true;  POLLVAR="   20000 100        0"; MEMVAR="";;
 		defer50)    CL=d; HTSPLIT=true;  POLLVAR="   50000 100        0"; MEMVAR="";;
