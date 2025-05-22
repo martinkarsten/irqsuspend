@@ -107,7 +107,7 @@ DEBUG $driver
 # use hard-coded irqmap
 case $driver in
 ice)
-	irqmap=( 2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25);;
+	irqmap=( 2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 49 50 51 52 53 54 55 56 41 42 43 44 45 56 47 48 57 58 59 60 61 62 63 64 65);;
 mlx4_en|mlx5_core)
 	pci_id=$(basename $(readlink /sys/class/net/$dev/device))
 	part=$(sudo lspci -vv -s $pci_id | fgrep Part | awk '{print $4}')
@@ -146,7 +146,7 @@ esac
 DEBUG ${irqmap[@]}
 
 # plausibility check
-[ $qcnttotal -eq ${#irqmap[@]} ] || error inconsistency between qcnttotal $qcnttotal and size of irqmap ${#irqmap[@]}
+[ $qcntcurr -le ${#irqmap[@]} ] || error "qcntcurr $qcntcurr > size of irqmap ${#irqmap[@]}"
 
 # process command-line arguments
 raw=false
@@ -389,7 +389,7 @@ for ((idx=0;idx<$irqtotal;idx++)); do
 	fi
 	rxpktsum=$(expr $rxpktsum + $rxpkts)
 	txpktsum=$(expr $txpktsum + $txpkts)
-	irqsum=$(expr $irqsum + $irqs)
+	[ $rxpkts -ge 0 ] && irqsum=$(expr $irqsum + $irqs)
 done
 printf "total   %12d %12d %12d\n" $irqsum $rxpktsum $txpktsum
 [ $(($rxdrops + $txdrops)) -gt 0 ] &&

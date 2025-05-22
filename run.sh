@@ -71,7 +71,7 @@ COALESCE0="na na na na na na na na na na na na"
 # client & server settings based on server name
 [ $# -gt 0 ] || usage
 case $1 in
-husky02|red01|red01vm|tilly01|mlx4|tilly02|node10)
+husky10|red01|red01vm|tilly01|mlx4|tilly02|node10)
 	hostfile=$(dirname $0)/hostspec.martin.sh;;
 *)
 	hostfile=$(dirname $0)/hostspec.$1.sh;;
@@ -86,7 +86,7 @@ $opt_ht && [ $HTBASE -eq 0 ] && error no hyperthreading on $SERVER
 
 [[ $arg_cores ]] && [ $arg_cores -le $MAXCORES ] && CORES=$arg_cores || CORES=$MAXCORES
 
-[[ $arg_conns ]] && CONNS=$arg_conns || CONNS=20
+[[ $arg_conns ]] && CONNS=$arg_conns || CONNS=24
 
 [ $# -gt 0 ] && { RUNS=$1; shift; } || RUNS=1
 
@@ -126,7 +126,7 @@ cleanup() {
 
 check_last_file() {
 	[ $file ] || return
-	[ -s mutilate-$file.out ] || rm *-$file.out
+	[ -s mutilate-$file.out ] || rm -f *-$file.out
 }
 
 # basic setup
@@ -174,8 +174,6 @@ for tc in $TESTCASES; do
 		defer200)   CL=d; HTSPLIT=true;  POLLVAR="  200000 100        0"; MEMVAR="";;
 		napibusy)   CL=d; HTSPLIT=false; POLLVAR="  200000 100        0"; MEMVAR="_MP_Usecs=64   _MP_Budget=64 _MP_Prefer=1";;
 		fullbusy)   CL=d; HTSPLIT=false; POLLVAR=" 5000000 100        0"; MEMVAR="_MP_Usecs=1000 _MP_Budget=64 _MP_Prefer=1"; MEMSPEC+=" -y";;
-		suspend0)   CL=d; HTSPLIT=false; POLLVAR="       0   0 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
-#		suspend1)   CL=d; HTSPLIT=false; POLLVAR="    1000   1 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
 		suspend10)  CL=d; HTSPLIT=false; POLLVAR="   10000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
 		suspend20)  CL=d; HTSPLIT=false; POLLVAR="   20000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
 		suspend50)  CL=d; HTSPLIT=false; POLLVAR="   50000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;

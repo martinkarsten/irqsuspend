@@ -44,43 +44,53 @@ function getnumber() {
 	esac
 	ls $file-$q-$t-*.out >/dev/null 2>&1 \
 	&& grep -Fh $text $file-$q-$t-*.out|eval "$filter"|$(dirname $0)/avg.sh $pos $2 \
-	|| echo X
+	|| echo X X
+}
+
+function print_qps    { file=mutilate; text=QPS;     getnumber  4  |awk '{printf "%8.0f", $2}'; }
+function print_avglat { file=mutilate; text=read;    getnumber  2  |awk '{printf "%8.0f", $6}'; }
+function print_95lat  { file=mutilate; text=read;    getnumber  9  |awk '{printf "%8.0f", $6}'; }
+function print_99lat  { file=mutilate; text=read;    getnumber 10  |awk '{printf "%8.0f", $6}'; }
+function print_cpu    { file=sar;      text=Average; getnumber 12  |awk '{printf "%8.0f", $2}'; }
+function print_cpq {
+	wrk=$(file=mutilate; text=QPS; getnumber 4|awk '{print $2}')
+	[ "$wrk" = "X" ] && printf "%8s" X || {
+		file=perf; text=cycles;        getnumber 1|awk -v wrk=$wrk '{printf "%8.0f", $2 / (wrk * 10)}'
+	}
+}
+function print_ipq {
+	wrk=$(file=mutilate; text=QPS; getnumber 4|awk '{print $2}')
+	[ "$wrk" = "X" ] && printf "%8s" X || {
+		file=perf; text=instructions;  getnumber 1|awk -v wrk=$wrk '{printf "%8.0f", $2 / (wrk * 10)}'
+	}
+}
+function print_ppi {
+	irqs=$(file=irq; text=total; getnumber 2|awk '{print $2}')
+	[ "$irqs" = "X" ] && printf "%8s" X || {
+		file=irq; text=total; getnumber 3|awk -v irqs=$irqs '{printf "%8.0f", $2 / irqs}'
+	}
 }
 
 case $OUTPUT in
 	table)
 		for t in $TC; do
 			echo $t
-			printf "%6s%8s%8s%8s%8s%8s%8s%8s\n" load qps avglat 95%lat 99%lat cpu cpq ipq
+			printf "%6s%8s%8s%8s%8s%8s%8s%8s%8s\n" load qps avglat 95%lat 99%lat cpu cpq ipq ppi
 			for q in $QPS; do
 				[ $q -eq 0 ] && s=MAX || s=$(($q/1000))K
 				printf "%6s" $s
-				file=mutilate; text=QPS;  getnumber 4  |awk '{printf "%8.0f", $2}'
-				file=mutilate; text=read; getnumber 2  |awk '{printf "%8.0f", $6}'
-				file=mutilate; text=read; getnumber 9  |awk '{printf "%8.0f", $6}'
-				file=mutilate; text=read; getnumber 10 |awk '{printf "%8.0f", $6}'
-				file=sar; text=Average;   getnumber 12 |awk '{printf "%8.0f", $2}'
-				wrk=$(file=mutilate; text=QPS; getnumber 4|awk '{print $2}')
-				file=perf; text=cycles;        getnumber 1|awk -v wrk=$wrk '{printf "%8.0f", $2 / (wrk * 10)}'
-				file=perf; text=instructions;  getnumber 1|awk -v wrk=$wrk '{printf "%8.0f", $2 / (wrk * 10)}'
+				print_qps; print_avglat; print_95lat; print_99lat; print_cpu; print_cpq; print_ipq; print_ppi
 				echo
 			done;echo
 		done;;
 	qtable)
 		[ $# -gt 0 ] && SORT="sort -n -k $1" || SORT="cat"
 		for q in $QPS; do
-			printf "%10s%6s%8s%8s%8s%8s%8s%8s%8s\n" testcase load qps avglat 95%lat 99%lat cpu cpq ipq
+			printf "%10s%6s%8s%8s%8s%8s%8s%8s%8s%8s\n" testcase load qps avglat 95%lat 99%lat cpu cpq ipq ppi
 			for t in $TC; do
 				[ $q -eq 0 ] && s=MAX || s=$(($q/1000))K
 				printf "%10s%6s" $t $s
-				file=mutilate; text=QPS;  getnumber 4  |awk '{printf "%8.0f", $2}'
-				file=mutilate; text=read; getnumber 2  |awk '{printf "%8.0f", $6}'
-				file=mutilate; text=read; getnumber 9  |awk '{printf "%8.0f", $6}'
-				file=mutilate; text=read; getnumber 10 |awk '{printf "%8.0f", $6}'
-				file=sar; text=Average;   getnumber 12 |awk '{printf "%8.0f", $2}'
-				wrk=$(file=mutilate; text=QPS; getnumber 4|awk '{print $2}')
-				file=perf; text=cycles;        getnumber 1|awk -v wrk=$wrk '{printf "%8.0f", $2 / (wrk * 10)}'
-				file=perf; text=instructions;  getnumber 1|awk -v wrk=$wrk '{printf "%8.0f", $2 / (wrk * 10)}'
+				print_qps; print_avglat; print_95lat; print_99lat; print_cpu; print_cpq; print_ipq; print_ppi
 				echo
 			done|$SORT;echo
 		done;;
@@ -91,42 +101,30 @@ case $OUTPUT in
 				[ $q -eq 0 ] && s=MAX || s=$(($q/1000))K
 				printf "%8s" $s
 			done;echo
-			printf "%6s" qps; for q in $QPS; do
-				file=mutilate; text=QPS;  getnumber 4  |awk '{printf "%8.0f", $2}'
-			done;echo
-			printf "%6s" avglat; for q in $QPS; do
-				file=mutilate; text=read; getnumber 2  |awk '{printf "%8.0f", $6}'
-			done;echo
-			printf "%6s" 95%lat; for q in $QPS; do
-				file=mutilate; text=read; getnumber 9  |awk '{printf "%8.0f", $6}'
-			done;echo
-			printf "%6s" 99%lat; for q in $QPS; do
-				file=mutilate; text=read; getnumber 10 |awk '{printf "%8.0f", $6}'
-			done;echo
-			printf "%6s" cpu; for q in $QPS; do
-				file=sar; text=Average;   getnumber 12 |awk '{printf "%8.0f", $2}'
-			done;echo
-			printf "%6s" cpq; for q in $QPS; do
-				wrk=$(file=mutilate; text=QPS; getnumber 4|awk '{print $2}')
-				file=perf; text=cycles;        getnumber 1|awk -v wrk=$wrk '{printf "%8.0f", $2 / (wrk * 10)}'
-			done;echo
-			printf "%6s" ipq; for q in $QPS; do
-				wrk=$(file=mutilate; text=QPS; getnumber 4|awk '{print $2}')
-				file=perf; text=instructions;  getnumber 1|awk -v wrk=$wrk '{printf "%8.0f", $2 / (wrk * 10)}'
-			done;echo
+			printf "%6s" qps;    for q in $QPS; do print_qps;    done;echo
+			printf "%6s" avglat; for q in $QPS; do print_avglat; done;echo
+			printf "%6s" 95%lat; for q in $QPS; do print_95lat;  done;echo
+			printf "%6s" 99%lat; for q in $QPS; do print_99lat;  done;echo
+			printf "%6s" cpu;    for q in $QPS; do print_cpu;    done;echo
+			printf "%6s" cpq;    for q in $QPS; do print_cpq;    done;echo
+			printf "%6s" ipq;    for q in $QPS; do print_ipq;    done;echo
+			printf "%6s" ppi;    for q in $QPS; do print_ppi;    done;echo
 			echo
 		done;;
 	qps)
+		printf "\n%5s %12s" qps testcase; printf "%18s %18s %6s %18s %6s\n\n" avg std cov med spread
 		for q in $QPS; do for t in $TC; do
 			[ $q -eq 0 ] && s=MAX || s=$(($q/1000))K
 			printf "%5s %12s" $s $t; getnumber $*|awk '{printf "%18.3f %18.3f %6.3f %18.3f %6.3f\n", $2, $4, $5, $6, $7}'
 		done|$SORT; echo; done;;
 	tc)
+		printf "\n%12s %5s" testcase qps; printf "%18s %18s %6s %18s %6s\n\n" avg std cov med spread
 		for t in $TC; do for q in $QPS; do
 			[ $q -eq 0 ] && s=MAX || s=$(($q/1000))K
 			printf "%12s %5s" $t $s; getnumber $*|awk '{printf "%18.3f %18.3f %6.3f %18.3f %6.3f\n", $2, $4, $5, $6, $7}'
 		done; echo; done;;
 	xpq)
+		printf "\n%5s %12s" qps testcase; printf "%18s %18s %6s %18s %6s\n\n" avg std cov med spread
 		for q in $QPS; do for t in $TC; do
 			[ $q -eq 0 ] && s=MAX || s=$(($q/1000))K
 			printf "%5s %12s" $s $t

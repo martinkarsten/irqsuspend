@@ -2,13 +2,13 @@ SERVER=$1
 MEMCACHED="work/memcached/memcached"; MUTILATE="mutilate"; PERF="/usr/local/perf/bin/perf"; FGDIR="~/work/FlameGraph"
 NDCLI="linux/net-next/tools/net/ynl/pyynl/cli.py --no-schema --output-json --spec linux/net-next/Documentation/netlink/specs/netdev.yaml"
 case $SERVER in
-	husky02)
+	husky10)
 		COALESCEd=" on  on 50  na na na 50  na na na  na  na" # default
 		COALESCEx="off  on  1  na na na 50  na na na  na  na" # RX coalescing off
 		;;
 	tilly01|node10)
 		COALESCEd=" on  on  8 128 na na  8 128 na na  on off" # default
-		COALESCEx="off  on  1 128 na na  8 128 na na off off" # RX coalescing off
+		COALESCEx="off  on  1   1 na na  8 128 na na off off" # RX coalescing off
 		;;
 	mlx4|red01|red01vm|tilly02)
 		COALESCEd=" on  na 16  44 na na 16  16 na 256 na  na" # default
@@ -16,9 +16,9 @@ case $SERVER in
 		;;
 esac
 case $SERVER in
-	husky02)
-		IFACE=ens15f0np0; SERVER_IP=192.168.198.22; DRIVER=husky04; CLIENTS=husky06,husky07
-		BASECORE=0; MAXCORES=6; OTHER="6-11"; HTBASE=0; MUTCORES=12; QPS="100000 200000 300000 400000"
+	husky10)
+		IFACE=enp2s0f0np0; SERVER_IP=192.168.195.30; DRIVER=husky00; CLIENTS=husky02,husky04,husky05,husky06,husky07,husky09
+		BASECORE=0; MAXCORES=8; OTHER="8-15"; HTBASE=0; MUTCORES=16; QPS="150000 300000 450000 600000"
 		;;
 	red01)
 		IFACE=enp130s0; SERVER_IP=10.10.0.1; DRIVER=red02; CLIENTS=red03,red04,red05,red06,red08,red09
@@ -29,7 +29,7 @@ case $SERVER in
 		BASECORE=0; MAXCORES=4; OTHER="5-6"; HTBASE=0; MUTCORES=12; QPS="100000 150000 200000"
 		;;
 	tilly01) # mlx5
-		IFACE=ens2f1np1; SERVER_IP=192.168.199.1; DRIVER=tilly02; CLIENTS=tilly03,tilly04,tilly05,tilly06,tilly07,tilly08
+		IFACE=ens2f1np1; SERVER_IP=192.168.199.1; DRIVER=tilly02; CLIENTS=tilly04,tilly05,tilly06,tilly07,tilly08
 		BASECORE=0; MAXCORES=8; OTHER="8-15"; HTBASE=16; MUTCORES=16; QPS="200000 400000 600000 800000"
 		;;
 	tilly02) # mlx4
