@@ -65,8 +65,7 @@ shift $(($OPTIND - 1))
 
 # set a default
 COALESCEd="na na na na na na na na na na na na"
-COALESCE1="na na na na na na na na na na na na"
-COALESCE0="na na na na na na na na na na na na"
+COALESCEx="na na na na na na na na na na na na"
 
 # client & server settings based on server name
 [ $# -gt 0 ] || usage
@@ -113,6 +112,9 @@ startup() {
 	qdef=$(ssh $SERVER ./irq.sh $IFACE clean getq)
 	[ -z "$qdef" ] && error problem with running irq.sh on $SERVER
 	tdef=$(ssh $SERVER ./setup.sh turboget)
+	[ -z "$tdef" ] && error problem with running setup.sh turboget on $SERVER
+	sdef=$(ssh $SERVER ./setup.sh scalingget)
+	[ -z "$sdef" ] && error problem with running setup.sh scalingget on $SERVER
 }
 
 cleanup() {
@@ -121,7 +123,7 @@ cleanup() {
 	ssh $SERVER sudo killall -q -9 bpftrace 2>/dev/null
 	ssh $SERVER ./irq.sh $IFACE setq $qdef
 	ssh $SERVER ./irq.sh $IFACE setirq1 all 0 $qdef setcoalesce $COALESCEd setpoll 0 0 0
-	[ -z "$tdef" ] || ssh $SERVER ./setup.sh turboset $tdef
+	ssh $SERVER ./setup.sh turboset $tdef scalingset $sdef
 }
 
 check_last_file() {
@@ -155,11 +157,11 @@ trap "exit 1" SIGHUP SIGINT SIGQUIT SIGTERM
 [ "$RUNS" = "clean" ] && exit 0 # exit trap cleans up
 echo "cleaning up"; cleanup
 
-ssh $SERVER ./setup.sh turboset 100 100 1
+ssh $SERVER ./setup.sh performance turboset 100 100 0
 
 # loop over test cases
 for ((run=0;run<$RUNS;run++)); do
-[ -f runs ] && [ $(cat runs) -lt $run ] && exit 0
+[ -f runs ] && [ $run -ge $(cat runs) ] && exit 0
 for qps in $QPS; do
 for tc in $TESTCASES; do
 	file=$qps-$tc-$run; echo && echo -n "***** PREPARING $file "
@@ -176,6 +178,8 @@ for tc in $TESTCASES; do
 		fullbusy)   CL=d; HTSPLIT=false; POLLVAR=" 5000000 100        0"; MEMVAR="_MP_Usecs=1000 _MP_Budget=64 _MP_Prefer=1"; MEMSPEC+=" -y";;
 		suspend10)  CL=d; HTSPLIT=false; POLLVAR="   10000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
 		suspend20)  CL=d; HTSPLIT=false; POLLVAR="   20000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
+		suspend11)  CL=x; HTSPLIT=false; POLLVAR="   10000   1 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
+		suspend21)  CL=x; HTSPLIT=false; POLLVAR="   20000   1 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
 		suspend50)  CL=d; HTSPLIT=false; POLLVAR="   50000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
 		suspend200) CL=d; HTSPLIT=false; POLLVAR="  200000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
 		*) echo UNKNOWN TEST CASE $tc; continue;;

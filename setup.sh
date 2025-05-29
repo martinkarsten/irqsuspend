@@ -22,6 +22,7 @@ function usage() {
 
 [ $# -lt 1 ] && usage;
 
+while [ $# -gt 0 ]; do
 case $1 in
 	boot)
 		sudo -s sh -c "echo 0 > /proc/sys/kernel/yama/ptrace_scope"         # gdb attach
@@ -35,21 +36,40 @@ case $1 in
 		sudo find /sys/kernel/tracing/ -type d -exec chmod go+x {} \;
 		sudo chmod -R go+r /sys/kernel/tracing/
 		[ -x ./setup_$HOSTNAME.sh ] && ./setup_$HOSTNAME.sh
-		;;
+		rm -f .irq.sh.*
+		shift;;
+	scalingget)
+		cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
+		shift;;
+	scalingset)
+		for sg in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+			shift
+			sudo sh -c "echo $1 > $sg"
+		done
+		shift;;
+	performance)
+		for sg in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+			sudo sh -c "echo performance > $sg"
+		done
+		shift;;
 	turboget)
 		[ -d /sys/devices/system/cpu/intel_pstate ] && {
 			cat /sys/devices/system/cpu/intel_pstate/min_perf_pct
 			cat /sys/devices/system/cpu/intel_pstate/max_perf_pct
 			cat /sys/devices/system/cpu/intel_pstate/no_turbo
-		};;
+		} || {
+			echo 0 100 0
+		}
+		shift;;
 	turboset)
 		[ $# -lt 4 ] && usage;
 		[ -d /sys/devices/system/cpu/intel_pstate ] && {
 			sudo sh -c "echo $2 > /sys/devices/system/cpu/intel_pstate/min_perf_pct"
 			sudo sh -c "echo $3 > /sys/devices/system/cpu/intel_pstate/max_perf_pct"
 			sudo sh -c "echo $4 > /sys/devices/system/cpu/intel_pstate/no_turbo"
-		};;
+		}
+		shift 4;;
 	*) usage;;
-esac
+esac; done
 
 exit 0
