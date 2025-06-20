@@ -150,8 +150,8 @@ process.sh -s sar Average 12        # cpu utilization
 process.sh -s irq total 2           # total irqs
 process.sh -s irq total 3           # total pkts received
 process.sh -s perf instructions 5   # average IPC
-process.sh -s epoll mc-worker 7 10  # average epoll return count
-process.sh -s poll @ 2 4            # average napi poll count
+process.sh -c epoll mc-worker 7 10  # average epoll return count, takes long time
+process.sh -c poll @ 2 4            # average napi poll count, takes long time
 
 process.sh -c mutilate QPS 4        # throughput, by TC, then load
 

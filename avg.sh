@@ -32,14 +32,16 @@ END {
 		avg = sum/cnt
 		if (sum2/cnt > avg*avg) stddev = sqrt(sum2/cnt - avg*avg)
 		else stddev = 0
-		if (avg > 0) cov = stddev/avg
+		if (avg != 0) cov = stddev/avg
 		else cov = 0
 		if (cnt % 2) {
 			med =  val[(cnt - 1) / 2];
 		} else {
 			med = (val[(cnt / 2) - 1] + val[(cnt / 2)]) / 2;
 		}
-		printf \"%.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f (min,avg,max,std,cov,med,spread,sum)\\n\", min, avg, max, stddev, cov, med, max / min, sum
+		if (min != 0) spread = max / min
+		else spread = -1
+		printf \"%.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f (min,avg,max,std,cov,med,spread,sum)\\n\", min, avg, max, stddev, cov, med, spread, sum
 	} else {
 		printf \"X X X X X X X\\n\"
 	}
