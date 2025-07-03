@@ -1,4 +1,5 @@
 #!/bin/bash
+
 function usage() {
 	echo "usage: $(basename $0) [-c|-s] <file> <text> <avg col> [<weight col>]"
 	echo "       $(basename $0) [-s] cpq|ipq"

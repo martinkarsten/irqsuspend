@@ -1,18 +1,9 @@
 #!/bin/bash
-# set -v # echo command, print variables
-# set -x # echo command, print values
 
-function error() {
-	echo "$*"
-	exit 1
-}
-
-function DEBUG() {
-#	echo "$*"
-	return
-}
+source $(dirname $0)/util.sh
 
 function checkconfig() {
+  $opt_preserve || return 1
   [ -f $cfgfile ] && grep -q "$*$" $cfgfile && return 0
   touch $cfgfile
   grep -q "$1 " $cfgfile && {
@@ -27,21 +18,28 @@ function usage() {
 	echo usage:
 	echo "$(basename $0) <interface> count [raw]"
 	echo "$(basename $0) <interface> clean"
-	echo "$(basename $0) <interface> getq"
 	echo "$(basename $0) <interface> irqmap"
 	echo "$(basename $0) <interface> setq <count>"
 	echo "$(basename $0) <interface> setirq1 <cpuset> <irq idx> <irq cnt>"
 	echo "$(basename $0) <interface> setirqN <cpuset> <irq idx> <irq cnt>"
 	echo "$(basename $0) <interface> setcoalesce <adaptive-rx> <adaptive-tx> <rx-usecs> <rx-frames> <rx-usecs-irq> <rx-frames-irq> <tx-usecs> <tx-frames> <tx-usecs-irq> <tx-frames-irq> <cqe-mode-rx> <cqe-mode-tx>"
+	echo "$(basename $0) <interface> setrx <adaptive-rx> <rx-usecs> <rx-frames>"
 	echo "$(basename $0) <interface> setpoll <gro timeout> <defer irqs> <suspend timeout>"
 	echo "$(basename $0) <interface> show"
 	exit 0
 }
 
-[ $# -gt 1 ] || usage;
+opt_preserve=true
+[ "$1" = "-p" ] && shift || opt_preserve=false
+[ $# -gt 1 ] || usage
 
-dev=$1; shift
-[ -d /sys/class/net/$dev ] || error device $dev not found
+unset dev
+ip -br l show $1 >/dev/null 2>&1 && dev=$1
+[ -z "$dev" ] && dev=$(ip -br addr show to $1 2>/dev/null|cut -f1 -d' ')
+[ -z "$dev" ] && dev=$(ip route get $1 2>/dev/null|grep -oP ' dev\s\K\w+')
+[ -z "$dev" ] && ERROR "$1 not found as either device or destination address"
+[ "$dev" = "lo" ] && ERROR "localhost interface to $1 does not have interrupts"
+shift
 
 cfgfile=$HOME/.irq.sh.config.$HOSTNAME.$dev
 prevfile=$HOME/.irq.sh.previous.$HOSTNAME.$dev
@@ -61,8 +59,8 @@ txcurr=$(ethtool -l $dev|grep -F TX:      |tail -1|awk '{print $2}'); [ "$txcurr
 cbcurr=$(ethtool -l $dev|grep -F Combined:|tail -1|awk '{print $2}'); [ "$cbcurr" = "n/a" ] && cbcurr=0
 qcntcurr=$(($rxcurr + $cbcurr))
 DEBUG QUEUEs: $rxtotal $txtotal $cbtotal $qcnttotal $rxcurr $txcurr $cbcurr $qcntcurr
-[ $qcntcurr -le $irqtotal ]  || error "qcntcurr $qcntcurr > irqtotal $irqtotal"
-[ $qcntcurr -le $qcnttotal ] || error "qcntcurr $qcntcurr > qcnttotal $qcnttotal"
+[ $qcntcurr -le $irqtotal ]  || ERROR "qcntcurr $qcntcurr > irqtotal $irqtotal"
+[ $qcntcurr -le $qcnttotal ] || ERROR "qcntcurr $qcntcurr > qcnttotal $qcnttotal"
 
 if [[ $NDCLI ]]; then
 	$NDCLI --dump napi-get|grep -Fq gro-flush-timeout && PERNAPI=true || PERNAPI=false
@@ -97,7 +95,7 @@ if [ "$1" = "irqmap" ]; then
 		echo ${irqmap[@]}
 		unset irqmap
 	else
-		error "cannot determine irq map, if netdev-genl cli is not provided"
+		ERROR "cannot determine irq map, if netdev-genl cli is not provided"
 	fi
 fi
 
@@ -107,7 +105,13 @@ DEBUG $driver
 # use hard-coded irqmap
 case $driver in
 ice)
-	irqmap=( 2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 49 50 51 52 53 54 55 56 41 42 43 44 45 56 47 48 57 58 59 60 61 62 63 64 65);;
+	pci_id=$(basename $(readlink /sys/class/net/$dev/device))
+	part=$(sudo lspci -vv -s $pci_id | fgrep Part | awk '{print $4}')
+	case $part in
+	K57775-015)
+		irqmap=( 2  3  4  5  6  7  8  9 10 11 12 13);;
+	*) ERROR "unsupported part $part for $driver";;
+	esac;;
 mlx4_en|mlx5_core)
 	pci_id=$(basename $(readlink /sys/class/net/$dev/device))
 	part=$(sudo lspci -vv -s $pci_id | fgrep Part | awk '{print $4}')
@@ -130,7 +134,7 @@ mlx4_en|mlx5_core)
 		irqmap=( 1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20);;
 	MCX516A-CDAT)          # mlx5_core: cache-sql13432
 		irqmap=( 1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63);;
-	*) error unsupported part $part for $driver;;
+	*) ERROR unsupported part $part for $driver;;
 	esac;;
 *)
 	case $HOSTNAME in
@@ -138,7 +142,7 @@ mlx4_en|mlx5_core)
 		mac=$(echo $(ip -br l show $dev) | awk '{print $3}')
 		case $mac in
 		*)
-			error unsupported driver $driver and mac $mac;;
+			ERROR unsupported driver $driver and mac $mac;;
 		esac;;
 	esac;;
 esac
@@ -146,7 +150,7 @@ esac
 DEBUG ${irqmap[@]}
 
 # plausibility check
-[ $qcntcurr -le ${#irqmap[@]} ] || error "qcntcurr $qcntcurr > size of irqmap ${#irqmap[@]}"
+[ $qcntcurr -le ${#irqmap[@]} ] || ERROR "qcntcurr $qcntcurr > size of irqmap ${#irqmap[@]}"
 
 # process command-line arguments
 raw=false
@@ -169,12 +173,9 @@ while [ $# -gt 0 ]; do
 		mlx4_en)
 			sudo ethtool -L $dev rx $cnt;;
 		*)
-			error channel settings: unsupported $driver;;
+			ERROR channel settings: unsupported $driver;;
 		esac
 		shift 2;;
-	getq)
-		echo $qcntcurr
-		shift 1;;
 	setirq1)
 		[ $# -lt 4 ] && usage
 		checkconfig $1 $2 $3 $4 && { shift 4; continue; }
@@ -219,7 +220,7 @@ while [ $# -gt 0 ]; do
 	setcoalesce)
 		[ $# -lt 13 ] && usage
 		checkconfig $1 $2 $3 $4 $5 $6 $7 $8 $9 ${10} ${11} ${12} ${13} && { shift 13; continue; }
-		unset COALESCINGr COALESCINGt COALESCINGc COALESCINGm; shift
+		shift; unset COALESCINGr COALESCINGt COALESCINGc COALESCINGm
 		[ "$1" = "na" ] || COALESCINGr+=" adaptive-rx $1"; shift
 		[ "$1" = "na" ] || COALESCINGt+=" adaptive-tx $1"; shift
 		[ "$1" = "na" ] || COALESCINGc+=" rx-usecs $1"; shift
@@ -232,6 +233,20 @@ while [ $# -gt 0 ]; do
 		[ "$1" = "na" ] || COALESCINGc+=" tx-frames-irq $1"; shift
 		[ "$1" = "na" ] || COALESCINGm+=" cqe-mode-rx $1"; shift
 		[ "$1" = "na" ] || COALESCINGm+=" cqe-mode-tx $1"; shift
+		[ -z "$COALESCINGr" ] || sudo ethtool -C $dev adaptive-rx off
+		[ -z "$COALESCINGt" ] || sudo ethtool -C $dev adaptive-tx off
+		[ -z "$COALESCINGc" ] || sudo ethtool -C $dev $COALESCINGc
+		[ -z "$COALESCINGr" ] || sudo ethtool -C $dev $COALESCINGr
+		[ -z "$COALESCINGt" ] || sudo ethtool -C $dev $COALESCINGt
+		[ -z "$COALESCINGm" ] || sudo ethtool -C $dev $COALESCINGm
+		;;
+	setrx)
+		[ $# -lt 4 ] && usage
+		checkconfig $1 $2 $3 $4 && { shift 4; continue; }
+		shift; unset COALESCINGr COALESCINGt COALESCINGc COALESCINGm
+		[ "$1" = "na" ] || COALESCINGr+=" adaptive-rx $1"; shift
+		[ "$1" = "na" ] || COALESCINGc+=" rx-usecs $1"; shift
+		[ "$1" = "na" ] || COALESCINGc+=" rx-frames $1"; shift
 		[ -z "$COALESCINGr" ] || sudo ethtool -C $dev adaptive-rx off
 		[ -z "$COALESCINGt" ] || sudo ethtool -C $dev adaptive-tx off
 		[ -z "$COALESCINGc" ] || sudo ethtool -C $dev $COALESCINGc
@@ -259,7 +274,6 @@ while [ $# -gt 0 ]; do
 	show)
 		# TODO: also show IRQ routing...
 		uname -a
-		echo TURBO: $($(dirname $0)/setup.sh turboget)
 		ethtool -c $dev|while read line; do
 			echo $line|grep -E "on|off" || echo $line|grep -Fv "n/a"
 		done|grep -v $dev|grep -Ev "^$"
@@ -274,7 +288,7 @@ while [ $# -gt 0 ]; do
 		$PERNAPI && $NDCLI --dump napi-get --json="{\"ifindex\": $ifx}"|jq .
 		cat /proc/cmdline
 		shift;;
-	*) error unknown operation $1;;
+	*) ERROR unknown operation $1;;
 	esac
 done
 

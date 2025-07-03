@@ -2,6 +2,8 @@
 # set -x # print values
 # set -v # print variables
 
+NETSTAT="${NETSTAT:-netstat}"
+
 prevfile=$HOME/.tcp.sh.previous.$HOSTNAME
 
 [ "$1" = "raw" ] && raw=true || raw=false
@@ -15,10 +17,10 @@ $raw || {
 }
 
 # current counters
-sent=$((netstat -s|grep -F "segments sen" || echo 0)|awk '{print $1}')
-retrans=$((netstat -s|grep -F "segments retrans" || echo 0)|awk '{print $1}')
-timeout=$(netstat -s|grep -F "TCPTimeouts"|awk '{print $2}')
-[ $timeout ] || timeout=$((netstat -s|grep -F "other TCP timeouts" || echo 0)|awk '{print $1}')
+sent=$(($NETSTAT -s|grep -F "segments sent" || echo 0)|awk '{print $1}')
+retrans=$(($NETSTAT -s|grep -F "segments retrans" || echo 0)|awk '{print $1}')
+timeout=$($NETSTAT -s|grep -F "TCPTimeouts"|awk '{print $2}')
+[ $timeout ] || timeout=$(($NETSTAT -s|grep -F "other TCP timeouts" || echo 0)|awk '{print $1}')
 
 $raw || {
 	echo "sent:$sent" > $prevfile
