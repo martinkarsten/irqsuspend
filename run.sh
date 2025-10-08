@@ -133,7 +133,7 @@ for tc in $TESTCASES; do
 	conns=$CONNS; cpus=$CORES
 	case "$tc" in # testcases case_start
 		base)       CL=d; HTSPLIT=true;  POLLVAR="       0   0        0"; MEMVAR="";;
-		base1c)     CL=x; HTSPLIT=true;  POLLVAR="       0   0        0"; MEMVAR="";;
+		base0c)     CL=x; HTSPLIT=true;  POLLVAR="       0   0        0"; MEMVAR="";;
 		defer20)    CL=d; HTSPLIT=true;  POLLVAR="   20000 100        0"; MEMVAR="";;
 		defer200)   CL=d; HTSPLIT=true;  POLLVAR="  200000 100        0"; MEMVAR="";;
 		napibusy)   CL=d; HTSPLIT=false; POLLVAR="  200000 100        0"; MEMVAR="_MP_Usecs=64   _MP_Budget=64 _MP_Prefer=1";;

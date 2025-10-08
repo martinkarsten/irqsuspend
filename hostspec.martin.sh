@@ -4,21 +4,21 @@ NDCLI="linux/net-next/tools/net/ynl/pyynl/cli.py --no-schema --output-json --spe
 case $SERVER in
 	husky10)
 		COALESCEd=" on  on 50  na na na 50  na na na  na  na" # default
-		COALESCEx="off  on  1  na na na 50  na na na  na  na" # RX coalescing off
+		COALESCEx="off  on  0  na na na 50  na na na  na  na" # RX coalescing off
 		;;
 	tilly01|node10)
 		COALESCEd=" on  on  8 128 na na  8 128 na na  on off" # default
-		COALESCEx="off  on  1   1 na na  8 128 na na off off" # RX coalescing off
+		COALESCEx="off  on  0   1 na na  8 128 na na off off" # RX coalescing off
 		;;
 	mlx4|red01|red01vm|tilly02)
 		COALESCEd=" on  na 16  44 na na 16  16 na 256 na  na" # default
-		COALESCEx="off  na  1  44 na na 16  16 na 256 na  na" # RX coalescing off
+		COALESCEx="off  na  0  44 na na 16  16 na 256 na  na" # RX coalescing off
 		;;
 esac
 case $SERVER in
 	husky10)
-		IFACE=enp2s0f0np0; SERVER_IP=192.168.195.30; DRIVER=husky00; CLIENTS=husky02,husky04,husky05,husky06,husky07,husky09
-		BASECORE=0; MAXCORES=8; OTHER="8-15"; HTBASE=0; MUTCORES=16; QPS="150000 300000 450000 600000"
+		IFACE=enp2s0f0np0; SERVER_IP=192.168.195.30; DRIVER=husky00; CLIENTS=husky02,husky04,husky06,husky07,husky09
+		BASECORE=0; MAXCORES=8; OTHER="8-15"; HTBASE=0; MUTCORES=16; QPS="100000 200000 300000 400000 500000 600000"
 		;;
 	red01)
 		IFACE=enp130s0; SERVER_IP=10.10.0.1; DRIVER=red02; CLIENTS=red03,red04,red05,red06,red08,red09
