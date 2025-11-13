@@ -52,6 +52,9 @@ sudo mount -o remount,mode=755 /sys/kernel/debug/tracing
 sudo chmod -R go+r /sys/kernel/tracing/
 sudo find /sys/kernel/tracing/ -type d -exec chmod go+x {} \;
 
+sudo sysctl -w net.ipv4.tcp_max_syn_backlog=32768
+sudo sysctl -w net.core.somaxconn=32768
+
 [ -d /sys/devices/system/cpu/intel_pstate ] && {
 	sudo sh -c "echo 100 > /sys/devices/system/cpu/intel_pstate/min_perf_pct"
 	sudo sh -c "echo 100 > /sys/devices/system/cpu/intel_pstate/max_perf_pct"

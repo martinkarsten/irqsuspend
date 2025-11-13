@@ -7,12 +7,15 @@ function usage() {
   echo "Options:"
   echo "-b                 build kernel first"
   echo "-c num             server cpus"
+  echo "-d num             mutilate pipeline depth"
   echo "-f                 create flamegraph"
   echo "-h                 hyperthread mode"
   echo "-n num             connections per mutilate thread"
   echo "-p ev1,ev2,...     perf events"
   echo "-q qps1,qps2,...   load rates"
+  echo "-s                 set skip flag (-S) in mutilate"
   echo "-t test1,test2,... test cases"
+  echo "-T duration        duration of each in seconds"
   exit 0
 }
 
@@ -27,22 +30,28 @@ function usage() {
 # command-line options: runs, qps, test cases
 opt_build=false
 unset arg_cores
+arg_depth=1
 opt_flamegraph=false
 opt_ht=false
 unset arg_conns
 opt_events="cycles,instructions"
 unset arg_qps
+unset arg_skip
 TESTCASES=$(show_cases testcases $0)
-while getopts "bc:fhn:p:q:t:" option; do
+arg_time=30
+while getopts "bc:d:fhn:p:q:st:T:" option; do
 case $option in
 	b) opt_build=true;;
 	c) arg_cores=${OPTARG};;
+	d) arg_depth=${OPTARG};;
 	f) opt_flamegraph=true;;
 	h) opt_ht=true;;
 	n) arg_conns=${OPTARG};;
 	p) opt_events=${OPTARG};;
 	q) arg_qps=$(echo ${OPTARG}|tr , ' ');;
+	s) arg_skip=" -S";;
 	t) TESTCASES=$(echo ${OPTARG}|tr , ' ');;
+	T) arg_time=${OPTARG};;
 	*) usage;;
 esac; done
 shift $(($OPTIND - 1))
@@ -170,25 +179,26 @@ for tc in $TESTCASES; do
 		observer=$cpus
 		irqs=$cpus
 	}
-	MEMSPEC="-t $cpus -N $cpus -b 16384 -c 32768 -m 10240 -o hashpower=24,no_lru_maintainer,no_lru_crawler"
-	MUTSPEC="-c $conns -q $qps -d 1 -u 0.03"
+	MEMSPEC="-t $cpus -N $cpus -b 32768 -c 32768 -m 10240 -o hashpower=24,no_lru_maintainer,no_lru_crawler"
+	MUTSPEC="-c $conns -q $qps -d $arg_depth -u 0.03 $arg_skip"
 	eval COALESCING=\$COALESCE$CL
 	ssh $SERVER NDCLI=\"$NDCLI\" ./irq.sh -p $IFACE setq $irqs setirqN $OTHER 0 0 setirq1 $irqcpuset 0 $irqs setcoalesce $COALESCING setpoll $POLLVAR show > setup-$file.out
 	printf "$MEMVAR taskset -c $runcpuset $MEMCACHED $MEMSPEC\n\n" > memcached-$file.out
+	printf "$MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t $arg_time\n\n" >> memcached-$file.out
 	printf "SERVER "; ssh -f $SERVER "$MEMVAR taskset -c $runcpuset $MEMCACHED $MEMSPEC"
-	printf "AGENTS "; pdsh -w $CLIENTS $MUTILATE -A 2>/dev/null &
+	printf "AGENTS "; pdsh -w $CLIENTS "ulimit -n 32768 && $MUTILATE -A" 2>/dev/null &
 	check_port 11211 $SERVER || echo "SERVER FAILED" | tee -a memcached-$file.out
 	check_port 5556 $CLIENTS || echo "AGENTS FAILED" | tee -a memcached-$file.out
-	printf "LOAD "; timeout 30s ssh $DRIVER $MUTILATE $MUTARGS --loadonly || echo "LOAD FAILED" >> memcached-$file.out
-	printf "WARM "; timeout 30s ssh $DRIVER $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t 10 >/dev/null 2>&1 || echo "WARMUP FAILED" >> memcached-$file.out
+	printf "LOAD "; timeout 30s ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS --loadonly" || echo "LOAD FAILED" >> memcached-$file.out
+	printf "WARM "; timeout 30s ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t 10" >/dev/null 2>&1 || echo "WARMUP FAILED" >> memcached-$file.out
 	tcptrace_start
 	bpftrace_start
 	polltrace_start
 	sartrace_run 10 10
 	$opt_flamegraph && flamegraph_start 10 10 || perfevent_run 10 10
 	irqtrace_start
-	printf "$MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t 30\n\n" >> memcached-$file.out
-	printf "RUN\n"; timeout 60s ssh $DRIVER $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t 30 | tee mutilate-$file.out # experiment
+	to=$(expr $arg_time \* 3 / 2)s
+	printf "RUN\n"; timeout $to ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t $arg_time" | tee mutilate-$file.out # experiment
 	irqtrace_stop
 	polltrace_stop
 	bpftrace_stop
