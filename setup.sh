@@ -29,13 +29,15 @@ function incpuset() {
 		echo WARNING: current_clocksource should be tsc
 	}
 
+	unset nohz_cores
 	for range in $(echo $2|tr , ' '); do
 		 low=$(echo $range|cut -f1 -d-)
 		high=$(echo $range|cut -f2 -d-)
 		for ((cpu=$low;cpu<=$high;cpu++)); do
-			incpuset $cpu $(cat /sys/devices/system/cpu/nohz_full) || echo "WARNING: core $cpu not in nohz_full set"
+			incpuset $cpu $(cat /sys/devices/system/cpu/nohz_full) || nohz_cores+=" $cpu"
 		done
 	done
+	[ -z "$nohz_cores" ] || echo "WARNING: cores not in nohz_full set:$nohz_cores"
 
 	exit 0
 }

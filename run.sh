@@ -11,6 +11,7 @@ function usage() {
   echo "-f                 create flamegraph"
   echo "-h                 hyperthread mode"
   echo "-n num             connections per mutilate thread"
+  echo "-m num             number of mutilate threads per client"
   echo "-p ev1,ev2,...     perf events"
   echo "-q qps1,qps2,...   load rates"
   echo "-s                 set skip flag (-S) in mutilate"
@@ -33,13 +34,14 @@ unset arg_cores
 arg_depth=1
 opt_flamegraph=false
 opt_ht=false
-unset arg_conns
+arg_conns=24
+unset arg_mutcores
 opt_events="cycles,instructions"
 unset arg_qps
 unset arg_skip
 TESTCASES=$(show_cases testcases $0)
 arg_time=30
-while getopts "bc:d:fhn:p:q:st:T:" option; do
+while getopts "bc:d:fhm:n:p:q:st:T:" option; do
 case $option in
 	b) opt_build=true;;
 	c) arg_cores=${OPTARG};;
@@ -47,6 +49,7 @@ case $option in
 	f) opt_flamegraph=true;;
 	h) opt_ht=true;;
 	n) arg_conns=${OPTARG};;
+	m) arg_mutcores=${OPTARG};;
 	p) opt_events=${OPTARG};;
 	q) arg_qps=$(echo ${OPTARG}|tr , ' ');;
 	s) arg_skip=" -S";;
@@ -78,7 +81,7 @@ $opt_ht && [ $HTBASE -eq 0 ] && ERROR no hyperthreading on $SERVER
 
 [[ $arg_cores ]] && [ $arg_cores -le $MAXCORES ] && CORES=$arg_cores || CORES=$MAXCORES
 
-[[ $arg_conns ]] && CONNS=$arg_conns || CONNS=24
+[[ $arg_mutcores ]] && MUTCORES=$arg_mutcores
 
 [ $# -gt 0 ] && { RUNS=$1; shift; } || RUNS=1
 
@@ -88,7 +91,7 @@ $opt_ht && [ $HTBASE -eq 0 ] && ERROR no hyperthreading on $SERVER
 echo "server: $SERVER; driver: $DRIVER; clients: $CLIENTS"
 echo "tests: $TESTCASES"
 echo "runs: $RUNS; rates: $QPS"
-echo "cores: $CORES; ht: $opt_ht; conns: $CONNS"
+echo "cores: $CORES; ht: $opt_ht; conns: $arg_conns; mutcores: $MUTCORES"
 
 [ "$RUNS" = "show" ] && exit 0
 
@@ -139,7 +142,7 @@ for qps in $QPS; do
 for tc in $TESTCASES; do
 	file=$qps-$tc-$run; echo && echo -n "***** PREPARING $file "
 	[ -f mutilate-$file.out ] && { echo "already done"; continue; }
-	conns=$CONNS; cpus=$CORES
+	conns=$arg_conns; cpus=$CORES
 	case "$tc" in # testcases case_start
 		base)       CL=d; HTSPLIT=true;  POLLVAR="       0   0        0"; MEMVAR="";;
 		base0c)     CL=x; HTSPLIT=true;  POLLVAR="       0   0        0"; MEMVAR="";;
