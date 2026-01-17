@@ -3,18 +3,25 @@
 function usage() {
 	echo "usage: $(basename $0) [-c|-s] <file> <text> <avg col> [<weight col>]"
 	echo "       $(basename $0) [-s] cpq|ipq"
-	echo "       $(basename $0)  -q|-r|-t [<sort row>]"
+	echo "       $(basename $0) [-R] -q|-r|-t [<sort row>]"
 	exit 0
 }
 
 [ $# -lt 1 ] && usage
 
-OUTPUT=qps
+declare -rA perf_labels=(["cycles"]="cpq"  ["instructions"]="ipq" ["mem_uops_retired.all_loads"]="lpq"
+ ["mem_load_uops_retired.hit_lfb"]="lfbpq" ["mem_load_uops_retired.l1_hit"]="l1pq"
+ ["mem_load_uops_retired.l2_hit"]="l2pq"   ["mem_load_uops_retired.llc_hit"]="l3pq"
+ ["mem_load_uops_retired.llc_miss"]="mpq")
 
-case $1 in
-	-s) SORT="sort -n -k 3"; shift;;
-	*)  SORT=cat
-esac
+RAW=false
+SORT=cat
+OUTPUT=qps
+PERCENT='{printf $0}'
+
+[ "$1" = "-R" ] && { RAW=true; shift; }
+[ "$1" = "-s" ] && { SORT="sort -n -k 3"; shift; }
+[ "$1" = "-p" ] && { PERCENT='{printf "%8.0f%8.0f%8.2f%8.2f%8.2f%8.2f%8.2f%8.0f%8.2f", $1, $2, 100*$3/$8, 100*$4/$8, 100*$5/$8, 100*$6/$8, 100*$7/$8, $8, 100*($3+$4+$5+$6+$7)/$8}\'; shift; }
 
 case $1 in
 	-c) OUTPUT=tc;           shift; [ $# -lt 3 ] && usage;;
@@ -53,18 +60,7 @@ function print_avglat { file=mutilate; text=read;    getnumber  2  |awk '{printf
 function print_95lat  { file=mutilate; text=read;    getnumber  9  |awk '{printf "%8.0f", $6}'; }
 function print_99lat  { file=mutilate; text=read;    getnumber 10  |awk '{printf "%8.0f", $6}'; }
 function print_cpu    { file=sar;      text=Average; getnumber 12  |awk '{printf "%8.0f", $2}'; }
-function print_cpq {
-	wrk=$(file=mutilate; text=QPS; getnumber 4|awk '{print $2}')
-	[ "$wrk" = "X" ] && printf "%8s" X || {
-		file=perf; text=cycles;        getnumber 1|awk -v wrk=$wrk '{printf "%8.0f", $2 / (wrk * 10)}'
-	}
-}
-function print_ipq {
-	wrk=$(file=mutilate; text=QPS; getnumber 4|awk '{print $2}')
-	[ "$wrk" = "X" ] && printf "%8s" X || {
-		file=perf; text=instructions;  getnumber 1|awk -v wrk=$wrk '{printf "%8.0f", $2 / (wrk * 10)}'
-	}
-}
+
 function print_ppi {
 	irqs=$(file=irq; text=total; getnumber 2|awk '{print $2}')
 	[ "$irqs" = "X" ] && printf "%8s" X || {
@@ -72,28 +68,50 @@ function print_ppi {
 	}
 }
 
+pcounters=$(cat perf-*.out|sed '/^$/d'|grep -Fv elapsed|grep -Fv Performance|awk '{print $2}'|sort|uniq)
+
+function print_headers {
+	printf "%8s%8s%8s%8s%8s%8s" qps avglat 95%lat 99%lat cpu ppi
+	[ -z "$pcounters" ] || for c in $pcounters; do printf "%8s" ${perf_labels["$c"]}; done
+	echo
+}
+
+function print_perf_perq {
+	wrk=$(file=mutilate; text=QPS; getnumber 4|awk '{print $2}')
+	[ -z "$pcounters" ] || for c in $pcounters; do
+		ls perf-$q-$t-*.out >/dev/null 2>&1 && for f in perf-$q-$t-*.out; do
+			tim=$(grep -A10 $c $f|grep -F elapsed|awk '{print $1}')
+			grep -F $c $f|awk  -v tim=$tim -v wrk=$wrk '{if (tim * wrk > 0) printf "%f", $1 / (tim * wrk); else printf X}'
+		done|$(dirname $0)/avg.sh 1 | awk '{if ($2 < 100) {printf "%8.2f", $2} else {printf "%8.0f", $2} }' || printf "%8s" X
+	done|awk "$PERCENT"
+}
+
 case $OUTPUT in
 	table)
 		for t in $TC; do
-			echo $t
-			printf "%6s%8s%8s%8s%8s%8s%8s%8s%8s\n" load qps avglat 95%lat 99%lat cpu cpq ipq ppi
+			$RAW || {
+				echo $t
+				printf "%6s" load; print_headers
+			}
 			for q in $QPS; do
 				[ $q -eq 0 ] && s=MAX || s=$(($q/1000))K
 				printf "%6s" $s
-				print_qps; print_avglat; print_95lat; print_99lat; print_cpu; print_cpq; print_ipq; print_ppi
+				print_qps; print_avglat; print_95lat; print_99lat; print_cpu; print_ppi; print_perf_perq
 				echo
-			done;echo
+			done; $RAW || echo
 		done;;
 	qtable)
 		[ $# -gt 0 ] && SORT="sort -n -k $1" || SORT="cat"
 		for q in $QPS; do
-			printf "%10s%6s%8s%8s%8s%8s%8s%8s%8s%8s\n" testcase load qps avglat 95%lat 99%lat cpu cpq ipq ppi
+			$RAW || {
+				printf "%10s%6s" testcase load; print_headers
+			}
 			for t in $TC; do
 				[ $q -eq 0 ] && s=MAX || s=$(($q/1000))K
 				printf "%10s%6s" $t $s
-				print_qps; print_avglat; print_95lat; print_99lat; print_cpu; print_cpq; print_ipq; print_ppi
+				print_qps; print_avglat; print_95lat; print_99lat; print_cpu; print_ppi; print_perf_perq
 				echo
-			done|$SORT;echo
+			done|$SORT; $RAW || echo
 		done;;
 	rtable)
 		for t in $TC; do
@@ -107,8 +125,6 @@ case $OUTPUT in
 			printf "%6s" 95%lat; for q in $QPS; do print_95lat;  done;echo
 			printf "%6s" 99%lat; for q in $QPS; do print_99lat;  done;echo
 			printf "%6s" cpu;    for q in $QPS; do print_cpu;    done;echo
-			printf "%6s" cpq;    for q in $QPS; do print_cpq;    done;echo
-			printf "%6s" ipq;    for q in $QPS; do print_ipq;    done;echo
 			printf "%6s" ppi;    for q in $QPS; do print_ppi;    done;echo
 			echo
 		done;;
@@ -130,9 +146,10 @@ case $OUTPUT in
 			[ $q -eq 0 ] && s=MAX || s=$(($q/1000))K
 			printf "%5s %12s" $s $t
 			for r in $(ls mutilate-$q-$t-*.out|cut -f4 -d-|cut -f1 -d.); do
-				wrk=$(grep -Fh QPS mutilate-$q-$t-$r.out|cut -f2 -d'(' | cut -f1 -d' ')
+				wrk=$(grep -Fh QPS mutilate-$q-$t-$r.out|awk '{print $4}')
 				cnt=$(grep -Fh $COUNT perf-$q-$t-$r.out|awk '{print $1}')
-				echo $cnt $wrk | awk '{printf "%18.3f\n", $1 / ($2 / 3)}'
+				tim=$(grep -A10 $COUNT perf-$q-$t-$r.out|grep -F elapsed|awk '{print $1}')
+				[ -z "$wrk" ] || echo $cnt $tim $wrk | awk '{printf "%18.3f\n", $1 / ($2 * $3)}'
 			done | avg.sh 1 | awk '{printf "%18.3f %18.3f %6.3f %18.3f %6.3f\n", $2, $4, $5, $6, $7}'
 		done | $SORT; echo; done;;
 	*)   echo internal error; exit 1;;

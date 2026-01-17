@@ -80,7 +80,8 @@ function flamegraph_stop() {
 }
 
 function perfevent_run() {
-	ssh -f $SERVER "sleep $1; taskset -c $observer $PERF stat -C $allcpuset -e $opt_events --no-big-num -- sleep $2 2>&1" > perf-$file.out
+	ssh -f $SERVER "sleep $1; taskset -c $observer $PERF stat -C $allcpuset -e $opt_events1 --no-big-num -- sleep $2 2>&1;
+                  sleep $3; taskset -c $observer $PERF stat -C $allcpuset -e $opt_events2 --no-big-num -- sleep $4 2>&1" > perf-$file.out
 }
 
 function irqtrace_start() {

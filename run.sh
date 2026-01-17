@@ -12,7 +12,8 @@ function usage() {
   echo "-h                 hyperthread mode"
   echo "-n num             connections per mutilate thread"
   echo "-m num             number of mutilate threads per client"
-  echo "-p ev1,ev2,...     perf events"
+  echo "-p ev1,ev2,...     perf event set 1"
+  echo "-P ev1,ev2,...     perf event set 2"
   echo "-q qps1,qps2,...   load rates"
   echo "-s                 set skip flag (-S) in mutilate"
   echo "-t test1,test2,... test cases"
@@ -36,12 +37,13 @@ opt_flamegraph=false
 opt_ht=false
 arg_conns=24
 unset arg_mutcores
-opt_events="cycles,instructions"
+opt_events1="cycles,instructions,mem_uops_retired.all_loads,mem_load_uops_retired.llc_miss"
+opt_events2="mem_load_uops_retired.hit_lfb,mem_load_uops_retired.l1_hit,mem_load_uops_retired.l2_hit,mem_load_uops_retired.llc_hit"
 unset arg_qps
 unset arg_skip
 TESTCASES=$(show_cases testcases $0)
 arg_time=30
-while getopts "bc:d:fhm:n:p:q:st:T:" option; do
+while getopts "bc:d:fhm:n:p:P:q:st:T:" option; do
 case $option in
 	b) opt_build=true;;
 	c) arg_cores=${OPTARG};;
@@ -50,7 +52,8 @@ case $option in
 	h) opt_ht=true;;
 	n) arg_conns=${OPTARG};;
 	m) arg_mutcores=${OPTARG};;
-	p) opt_events=${OPTARG};;
+	p) opt_events1=${OPTARG};;
+	P) opt_events2=${OPTARG};;
 	q) arg_qps=$(echo ${OPTARG}|tr , ' ');;
 	s) arg_skip=" -S";;
 	t) TESTCASES=$(echo ${OPTARG}|tr , ' ');;
@@ -192,13 +195,16 @@ for tc in $TESTCASES; do
 	printf "AGENTS "; pdsh -w $CLIENTS "ulimit -n 32768 && $MUTILATE -A" 2>/dev/null &
 	check_port 11211 $SERVER || echo "SERVER FAILED" | tee -a memcached-$file.out
 	check_port 5556 $CLIENTS || echo "AGENTS FAILED" | tee -a memcached-$file.out
-	printf "LOAD "; timeout 30s ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS --loadonly" || echo "LOAD FAILED" >> memcached-$file.out
-	printf "WARM "; timeout 30s ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t 10" >/dev/null 2>&1 || echo "WARMUP FAILED" >> memcached-$file.out
+	time5=$(expr $arg_time / 5)
+	time3=$(expr $arg_time / 3)
+	to3=$(expr $time3 \* 3 / 2)s
+	printf "LOAD "; timeout $to3 ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS --loadonly" || echo "LOAD FAILED" >> memcached-$file.out
+	printf "WARM "; timeout $to3 ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t $time3" >/dev/null 2>&1 || echo "WARMUP FAILED" >> memcached-$file.out
 	tcptrace_start
 	bpftrace_start
 	polltrace_start
-	sartrace_run 10 10
-	$opt_flamegraph && flamegraph_start 10 10 || perfevent_run 10 10
+	sartrace_run $time3 $time3
+	$opt_flamegraph && flamegraph_start $time3 $time3 || perfevent_run $time5 $time5 $time5 $time5
 	irqtrace_start
 	to=$(expr $arg_time \* 3 / 2)s
 	printf "RUN\n"; timeout $to ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t $arg_time" | tee mutilate-$file.out # experiment
