@@ -1,11 +1,12 @@
 # this assumes that patch files are available in the user's home directory
 
 # build modified libevent and memcached
+sudo apt install autoconf cmake libssl-dev pkg-config
 patchdir=$HOME
-git clone --depth 1 --branch 1.6.32 https://github.com/memcached/memcached.git
+git clone --depth 1 --branch 1.6.40 https://github.com/memcached/memcached.git
 cd memcached
 ./autogen.sh
-patch -p1 < $patchdir/memcached.patch
+patch -p1 < $patchdir/memcached-1.6.40.patch
 git clone --depth 1 --branch release-2.1.12-stable https://github.com/libevent/libevent.git
 patch -d libevent -p1 < $patchdir/libevent.patch
 cmake -S libevent -B libevent -DCMAKE_INSTALL_PREFIX=. -DEVENT__LIBRARY_TYPE=SHARED
@@ -14,7 +15,7 @@ cmake --build libevent
 make -j $(nproc)
 
 # build mutilate
-sudo apt install gengetopt libzmq-dev scons
+sudo apt install gengetopt libevent-dev libzmq3-dev scons
 git clone --depth 1 https://github.com/leverich/mutilate
 cd mutilate
 patch -p1 < $patchdir/mutilate.patch

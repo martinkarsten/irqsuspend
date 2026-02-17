@@ -4,13 +4,13 @@ usage() {
 	echo "Options:"
   echo "-b build: locked(c,t)"
   echo "-c compile"
-  echo "-C clean first"
-  echo "-d distclean first"
   echo "-i install and boot"
   echo "-s setup: locked(t),i,w"
   echo "-t transfer image"
   echo "-w wait for boot"
-	echo "default: p,b,i,w"
+  echo "-C clean first"
+  echo "-D distclean first"
+	echo "default: b,i,w"
 	exit 1
 }
 
@@ -23,7 +23,7 @@ opt_setup=false
 opt_transfer=false
 opt_wait=false
 
-while getopts "bcCdipstw" option; do
+while getopts "bcistwCD" option; do
 case $option in
 	b) opt_build=true;;
 	c) opt_compile=true;;
@@ -50,21 +50,17 @@ esac; done
 
 dir=$(dirname $0)
 
-$opt_clean && {
-	ssh -t $buildhost "make -C linux/net-next clean"
-}
-
-$opt_distclean && {
-	ssh -t $buildhost "make -C linux/net-next distclean"
-}
-
 $opt_build && {
-	$opt_clean && cleanflag="-C" || unset cleanflag
+	unset cleanflags
+	$opt_clean && cleanflags+=" -C"
+	$opt_distclean && cleanflag+=" -D"
 	echo "getting lock"
-	flock -F $TMPDIR/build.$buildhost $0 -ct $cleanflag $target $buildhost $scphelper || exit 1
+	flock -F $TMPDIR/build.$buildhost $0 -ct $cleanflags $target $buildhost $scphelper || exit 1
 }
 
 $opt_compile && {
+	$opt_clean && ssh -t $buildhost "make -C linux/net-next clean"
+	$opt_distclean && ssh -t $buildhost "make -C linux/net-next distclean"
 	ssh -t $buildhost "[ -f config.$target ] && cp config.$target linux/net-next/.config && echo|make -C linux/net-next oldconfig" || exit 1
 	ssh -t $buildhost "sed -i -e 's/CONFIG_DEBUG_INFO;/CONFIG_DEBUG_INFO_XXX;/' linux/net-next/scripts/package/mkdebian"
 	ssh -t $buildhost 'rm -f linux/*.deb linux/linux-upstream*; make -C linux/net-next -j $(nproc) LOCALVERSION=-test bindeb-pkg' || exit 1
@@ -84,11 +80,13 @@ $opt_transfer && [ "$buildhost" != "$target" ] && {
 
 $opt_install && {
 	ssh -t $target 'uname -r|grep -Fq test && sudo apt purge $(apt list --installed|grep -F $(uname -r)|cut -f1 -d/) -y'
-	ssh -t $target 'sudo dpkg -i linux/linux-{headers,image}-*.deb && sudo grub-reboot 0 && sudo reboot || exit 1' || exit 1
+	ssh -t $target 'sudo dpkg -i linux/linux-{headers,image}-*.deb' || exit 1
+	ssh -t $target 'sudo grub-reboot $(expr $(sudo grep -F Ubuntu /boot/grub/grub.cfg |grep -n -m 1 $(echo linux/linux-image-*|cut -f1 -d_|cut -f3- -d-)|cut -f1 -d:) - 1) && sudo reboot || exit 1' || exit 1
 }
 
 $opt_wait && {
 	echo "waiting for $target"
+	sleep 1
 	until ssh -t -oPasswordAuthentication=no $target true 2>/dev/null; do sleep 3; done
 }
 

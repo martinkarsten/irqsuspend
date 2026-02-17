@@ -124,7 +124,7 @@ $opt_build && {
 # copy script files
 echo "copying scripts to server and clients"
 dir=$(dirname $0)
-files=$dir/{irq,setup,util}.sh
+files=$(echo $dir/{irq,setup,util}.sh)
 [ -f $dir/servercfg/setup_$SERVER.sh ] && files+=" $dir/servercfg/setup_$SERVER.sh"
 scp $files $SERVER: >/dev/null 2>&1 &
 for h in $DRIVER $(echo $CLIENTS|tr , ' '); do scp $dir/tcp.sh $h: >/dev/null 2>&1 & done
@@ -218,6 +218,7 @@ for tc in $TESTCASES; do
 	pdsh -w $DRIVER,$CLIENTS killall -q mutilate
 	ssh $SERVER killall -q memcached
 	kill -9 $(jobs -p) 2>/dev/null
+	ssh $SERVER killall -q -9 memcached
 	$opt_flamegraph && flamegraph_stop
 done; done; done
 
