@@ -7,7 +7,6 @@ usage() {
   echo "-C clean first"
   echo "-d distclean first"
   echo "-i install and boot"
-  echo "-p prepare target"
   echo "-s setup: locked(t),i,w"
   echo "-t transfer image"
   echo "-w wait for boot"
@@ -20,7 +19,6 @@ opt_compile=false
 opt_clean=false
 opt_distclean=false
 opt_install=false
-opt_prepare=false
 opt_setup=false
 opt_transfer=false
 opt_wait=false
@@ -32,7 +30,6 @@ case $option in
 	C) opt_clean=true;;
 	d) opt_distclean=true;;
 	i) opt_install=true;;
-	p) opt_prepare=true;;
 	s) opt_setup=true;;
 	t) opt_transfer=true;;
 	w) opt_wait=true;;
@@ -40,7 +37,6 @@ case $option in
 esac; done
 
 [ $OPTIND -eq 1 ] && {
-	opt_prepare=true
 	opt_build=true
 	opt_install=true
 	opt_wait=true
@@ -53,12 +49,6 @@ esac; done
 [ $# -gt 2 ] && scphelper=$3 || scphelper=kalli
 
 dir=$(dirname $0)
-
-$opt_prepare && {
-	files=$dir/setup.sh
-	[ -f $dir/servercfg/setup_$target.sh ] && files+=" $dir/servercfg/setup_$target.sh"
-	scp $files $target:
-}
 
 $opt_clean && {
 	ssh -t $buildhost "make -C linux/net-next clean"
@@ -99,7 +89,7 @@ $opt_install && {
 
 $opt_wait && {
 	echo "waiting for $target"
-	until ssh -t -oPasswordAuthentication=no $target ./setup.sh 2>/dev/null; do sleep 3; done
+	until ssh -t -oPasswordAuthentication=no $target true 2>/dev/null; do sleep 3; done
 }
 
 exit 0

@@ -124,7 +124,9 @@ $opt_build && {
 # copy script files
 echo "copying scripts to server and clients"
 dir=$(dirname $0)
-scp $dir/{irq,setup,util}.sh $SERVER: >/dev/null 2>&1 &
+files=$dir/{irq,setup,util}.sh
+[ -f $dir/servercfg/setup_$SERVER.sh ] && files+=" $dir/servercfg/setup_$SERVER.sh"
+scp $files $SERVER: >/dev/null 2>&1 &
 for h in $DRIVER $(echo $CLIENTS|tr , ' '); do scp $dir/tcp.sh $h: >/dev/null 2>&1 & done
 wait
 
