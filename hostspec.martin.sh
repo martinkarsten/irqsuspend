@@ -6,7 +6,7 @@ case $SERVER in
 		COALESCEd=" on  na 16  44 na na 16  16 na 256 na  na" # default
 		COALESCEx="off  na  0  44 na na 16  16 na 256 na  na" # RX coalescing off
 		;;
-	tilly01|node10) # mlx5
+	tilly01|tilly01vm|node10) # mlx5
 		COALESCEd=" on  on  8 128 na na  8 128 na na  on off" # default
 		COALESCEx="off  on  0   1 na na  8 128 na na off off" # RX coalescing off
 		;;
@@ -27,6 +27,10 @@ case $SERVER in
 	tilly01)
 		IFACE=ens2f0np0; SERVER_IP=192.168.199.1; DRIVER=tilly02; CLIENTS=tilly03,tilly04,tilly05,tilly06,tilly07,tilly08
 		BASECORE=0; MAXCORES=8; OTHER="8-15"; HTBASE=16; MUTCORES=16; QPS="200000 400000 600000"
+		;;
+	tilly01vm)
+		IFACE=enp7s0; SERVER_IP=192.168.199.9; DRIVER=tilly02; CLIENTS=tilly03,tilly04,tilly05,tilly06,tilly07,tilly08
+		BASECORE=0; MAXCORES=8; OTHER="8-15"; HTBASE=0; MUTCORES=16; QPS="200000 400000 600000"
 		;;
 	node10)
 		IFACE=ens1np0; SERVER_IP=192.168.126.110; DRIVER=node01; CLIENTS=node03,node04,node05,node06,node07,node08
