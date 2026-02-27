@@ -8,12 +8,10 @@ function usage() {
   echo "-b                 build kernel first"
   echo "-c num             server cpus"
   echo "-d num             mutilate pipeline depth"
-  echo "-f                 create flamegraph"
   echo "-h                 hyperthread mode"
   echo "-n num             connections per mutilate thread"
   echo "-m num             number of mutilate threads per client"
-  echo "-p ev1,ev2,...     perf event set 1"
-  echo "-P ev1,ev2,...     perf event set 2"
+  echo "-p ev1,ev2,...     perf event set (or flame, mem)"
   echo "-q qps1,qps2,...   load rates"
   echo "-s                 set skip flag (-S) in mutilate"
   echo "-t test1,test2,... test cases"
@@ -33,27 +31,23 @@ function usage() {
 opt_build=false
 unset arg_cores
 arg_depth=1
-opt_flamegraph=false
 opt_ht=false
 arg_conns=24
 unset arg_mutcores
-opt_events1="cycles,instructions,mem_uops_retired.all_loads,mem_load_uops_retired.llc_miss"
-opt_events2="mem_load_uops_retired.hit_lfb,mem_load_uops_retired.l1_hit,mem_load_uops_retired.l2_hit,mem_load_uops_retired.llc_hit"
+opt_events="cycles,instructions,mem_uops_retired.all_loads,mem_uops_retired.all_stores"
 unset arg_qps
 unset arg_skip
 TESTCASES=$(show_cases testcases $0)
 arg_time=30
-while getopts "bc:d:fhm:n:p:P:q:st:T:" option; do
+while getopts "bc:d:hm:n:p:q:st:T:" option; do
 case $option in
 	b) opt_build=true;;
 	c) arg_cores=${OPTARG};;
 	d) arg_depth=${OPTARG};;
-	f) opt_flamegraph=true;;
 	h) opt_ht=true;;
 	n) arg_conns=${OPTARG};;
 	m) arg_mutcores=${OPTARG};;
-	p) opt_events1=${OPTARG};;
-	P) opt_events2=${OPTARG};;
+	p) opt_events=${OPTARG};;
 	q) arg_qps=$(echo ${OPTARG}|tr , ' ');;
 	s) arg_skip=" -S";;
 	t) TESTCASES=$(echo ${OPTARG}|tr , ' ');;
@@ -155,8 +149,15 @@ for tc in $TESTCASES; do
 		defer200)   CL=d; HTSPLIT=true;  POLLVAR="  200000 100        0"; MEMVAR="";;
 		napibusy)   CL=d; HTSPLIT=false; POLLVAR="  200000 100        0"; MEMVAR="_MP_Usecs=64   _MP_Budget=64 _MP_Prefer=1";;
 		fullbusy)   CL=d; HTSPLIT=false; POLLVAR=" 5000000 100        0"; MEMVAR="_MP_Usecs=1000 _MP_Budget=64 _MP_Prefer=1"; MEMSPEC+=" -y";;
-		suspend10)  CL=d; HTSPLIT=false; POLLVAR="   10000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
+#		suspend1)   CL=d; HTSPLIT=false; POLLVAR="    1000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
+#		suspend2)   CL=d; HTSPLIT=false; POLLVAR="    1000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
+#		suspend5)   CL=d; HTSPLIT=false; POLLVAR="    5000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
+#		suspend10)  CL=d; HTSPLIT=false; POLLVAR="   10000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
 		suspend20)  CL=d; HTSPLIT=false; POLLVAR="   20000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
+#		suspend50)  CL=d; HTSPLIT=false; POLLVAR="   50000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
+#		suspend100) CL=d; HTSPLIT=false; POLLVAR="  100000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
+		suspend200) CL=d; HTSPLIT=false; POLLVAR="  200000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
+#		suspend500) CL=d; HTSPLIT=false; POLLVAR="  200000 100 20000000"; MEMVAR="_MP_Usecs=0    _MP_Budget=64 _MP_Prefer=1";;
 		*) echo UNKNOWN TEST CASE $tc; continue;;
 	esac          # testcases esac_end
 	$opt_ht && {
@@ -197,16 +198,19 @@ for tc in $TESTCASES; do
 	printf "AGENTS "; pdsh -w $CLIENTS "ulimit -n 32768 && $MUTILATE -A" 2>/dev/null &
 	check_port 11211 $SERVER || echo "SERVER FAILED" | tee -a memcached-$file.out
 	check_port 5556 $CLIENTS || echo "AGENTS FAILED" | tee -a memcached-$file.out
-	time5=$(expr $arg_time / 5)
 	time3=$(expr $arg_time / 3)
 	to3=$(expr $time3 \* 3 / 2)s
 	printf "LOAD "; timeout $to3 ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS --loadonly" || echo "LOAD FAILED" >> memcached-$file.out
 	printf "WARM "; timeout $to3 ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t $time3" >/dev/null 2>&1 || echo "WARMUP FAILED" >> memcached-$file.out
+	case $opt_events in
+		mem)   perfmem_start $time3 $time3;;
+		flame) flamegraph_start $time3 $time3;;
+		*)     perfevent_run $time3 $time3;;
+	esac
+	sartrace_run $time3 $time3
 	tcptrace_start
 	bpftrace_start
 	polltrace_start
-	sartrace_run $time3 $time3
-	$opt_flamegraph && flamegraph_start $time3 $time3 || perfevent_run $time5 $time5 $time5 $time5
 	irqtrace_start
 	to=$(expr $arg_time \* 3 / 2)s
 	printf "RUN\n"; timeout $to ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t $arg_time" | tee mutilate-$file.out # experiment
@@ -219,7 +223,10 @@ for tc in $TESTCASES; do
 	ssh $SERVER killall -q memcached
 	kill -9 $(jobs -p) 2>/dev/null
 	ssh $SERVER killall -q -9 memcached
-	$opt_flamegraph && flamegraph_stop
+	case $opt_events in
+		mem)   perfmem_stop;;
+		flame) flamegraph_stop;;
+	esac
 done; done; done
 
 exit 0

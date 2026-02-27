@@ -35,6 +35,32 @@ function check_port() {
 	timeout 30s pdsh -w $* "while ! $SOCAT /dev/null TCP:localhost:$port 2>/dev/null; do sleep 1; done"
 }
 
+function perfmem_start() {
+	ssh -f $SERVER "sleep $1; taskset -c $observer $PERF mem record -C $allcpuset -F 99 -o perf.data -- sleep $2"
+}
+
+function perfmem_stop() {
+	ssh -f $SERVER "unset PAGER; $PERF mem report --sort=mem --stdio -i perf.data" > perfmem-$file.out
+}
+
+function flamegraph_start() {
+	ssh -f $SERVER "sleep $1; taskset -c $observer $PERF record -C $allcpuset -F 99 -g -o perf.data -- sleep $2 >/dev/null"
+}
+
+function flamegraph_stop() {
+	# need ssh -t here, otherwise 'perf script' assumes that stdin is a file and won't run
+	ssh -t $SERVER "$PERF script >out.perf && $FGDIR/stackcollapse-perf.pl out.perf >out.folded && $FGDIR/flamegraph.pl out.folded >flamegraph.svg"
+	scp $SERVER:flamegraph.svg flamegraph-$file.svg && ssh $SERVER "rm -f perf.data out.perf out.folded flamegraph.svg"
+}
+
+function perfevent_run() {
+	ssh -f $SERVER "sleep $1; taskset -c $observer $PERF stat -C $allcpuset -e $opt_events --no-big-num -- sleep $2 2>&1" > perf-$file.out
+}
+
+function sartrace_run() {
+	ssh -f $SERVER "sleep $1; taskset -c $observer $SAR -P $allcpuset -u ALL 1 $2" > $SAR-$file.out
+}
+
 function tcptrace_start() {
 	pdsh -w $DRIVER,$CLIENTS ./tcp.sh >/dev/null
 }
@@ -63,25 +89,6 @@ function polltrace_start() {
 function polltrace_stop() {
   ssh $SERVER cat /sys/kernel/debug/tracing/events/syscalls/sys_exit_epoll_wait/hist|grep -F mc-worker > epoll-$file.out
   ssh $SERVER sudo sh -c "'echo \!hist:key=common_pid.execname,ret > /sys/kernel/debug/tracing/events/syscalls/sys_exit_epoll_wait/trigger'"
-}
-
-function sartrace_run() {
-	ssh -f $SERVER "sleep $1; taskset -c $observer $SAR -P $allcpuset -u ALL 1 $2" > $SAR-$file.out
-}
-
-function flamegraph_start() {
-	ssh -f $SERVER "sleep $1; taskset -c $observer $PERF record -C $allcpuset -F 99 -g -o perf.data -- sleep $2 >/dev/null"
-}
-
-function flamegraph_stop() {
-	# need ssh -t here, otherwise 'perf script' assumes that stdin is a file and won't run
-	ssh -t $SERVER "$PERF script >out.perf && $FGDIR/stackcollapse-perf.pl out.perf >out.folded && $FGDIR/flamegraph.pl out.folded >flamegraph.svg"
-	scp $SERVER:flamegraph.svg flamegraph-$file.svg && ssh $SERVER "rm -f perf.data out.perf out.folded flamegraph.svg"
-}
-
-function perfevent_run() {
-	ssh -f $SERVER "sleep $1; taskset -c $observer $PERF stat -C $allcpuset -e $opt_events1 --no-big-num -- sleep $2 2>&1;
-                  sleep $3; taskset -c $observer $PERF stat -C $allcpuset -e $opt_events2 --no-big-num -- sleep $4 2>&1" > perf-$file.out
 }
 
 function irqtrace_start() {

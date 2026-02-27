@@ -9,19 +9,18 @@ function usage() {
 
 [ $# -lt 1 ] && usage
 
-declare -rA perf_labels=(["cycles"]="cpq"  ["instructions"]="ipq" ["mem_uops_retired.all_loads"]="lpq"
- ["mem_load_uops_retired.hit_lfb"]="lfbpq" ["mem_load_uops_retired.l1_hit"]="l1pq"
- ["mem_load_uops_retired.l2_hit"]="l2pq"   ["mem_load_uops_retired.llc_hit"]="l3pq"
- ["mem_load_uops_retired.llc_miss"]="mpq")
+declare -rA perf_labels=(["cycles"]="cpq"  ["instructions"]="ipq"
+ ["mem_uops_retired.all_loads"]="ldpq"
+ ["mem_uops_retired.all_stores"]="stpq")
 
 RAW=false
 SORT=cat
 OUTPUT=qps
-PERCENT='{printf $0}'
+PERCENT=false
 
 [ "$1" = "-R" ] && { RAW=true; shift; }
 [ "$1" = "-s" ] && { SORT="sort -n -k 3"; shift; }
-[ "$1" = "-p" ] && { PERCENT='{printf "%8.0f%8.0f%8.2f%8.2f%8.2f%8.2f%8.2f%8.0f%8.2f", $1, $2, 100*$3/$8, 100*$4/$8, 100*$5/$8, 100*$6/$8, 100*$7/$8, $8, 100*($3+$4+$5+$6+$7)/$8}\'; shift; }
+[ "$1" = "-p" ] && { PERCENT=true; shift; }
 
 case $1 in
 	-c) OUTPUT=tc;           shift; [ $# -lt 3 ] && usage;;
@@ -41,6 +40,9 @@ TC=$(ls *.out|cut -f3 -d-|sort -V|uniq)
 QPS=$(ls *.out|cut -f2 -d-|sort -n|uniq)
 # move 0 (max) to the end
 echo $QPS|grep -q "^0 " && QPS="$(echo $QPS|cut -f2- -d' ') 0"
+
+ls perf-*.out >/dev/null 2>&1 && pcounters=$(cat perf-*.out|sed '/^$/d'|grep -Fv elapsed|grep -Fv Performance|awk '{print $2}'|sort|uniq) || unset pcounters
+[[ $pcounters == *"cycles"* ]] && [[ $pcounters == *"instructions"* ]] && perf_ipc=true || perf_ipc=false
 
 function getnumber() {
 	pos=$1
@@ -68,22 +70,30 @@ function print_ppi {
 	}
 }
 
-pcounters=$(cat perf-*.out|sed '/^$/d'|grep -Fv elapsed|grep -Fv Performance|awk '{print $2}'|sort|uniq)
-
 function print_headers {
 	printf "%8s%8s%8s%8s%8s%8s" qps avglat 95%lat 99%lat cpu ppi
-	[ -z "$pcounters" ] || for c in $pcounters; do printf "%8s" ${perf_labels["$c"]}; done
+	[ -z "$pcounters" ] || for c in $pcounters; do
+		printf "%8s" ${perf_labels["$c"]}
+		$perf_ipc && [[ $c == "instructions" ]] && printf "     ipc"
+	done
 	echo
 }
 
 function print_perf_perq {
 	wrk=$(file=mutilate; text=QPS; getnumber 4|awk '{print $2}')
 	[ -z "$pcounters" ] || for c in $pcounters; do
-		ls perf-$q-$t-*.out >/dev/null 2>&1 && for f in perf-$q-$t-*.out; do
-			tim=$(grep -A10 $c $f|grep -F elapsed|awk '{print $1}')
+		val=X
+		ls perf-$q-$t-*.out >/dev/null 2>&1 && val=$(for f in perf-$q-$t-*.out; do
+			tim=$(grep -F elapsed $f|awk '{print $1}')
 			grep -F $c $f|awk  -v tim=$tim -v wrk=$wrk '{if (tim * wrk > 0) printf "%f", $1 / (tim * wrk); else printf X}'
-		done|$(dirname $0)/avg.sh 1 | awk '{if ($2 < 100) {printf "%8.2f", $2} else {printf "%8.0f", $2} }' || printf "%8s" X
-	done|awk "$PERCENT"
+		done|$(dirname $0)/avg.sh 1|cut -f2 -d' ')
+		echo $val | awk '{if ($1 < 100) {printf "%8.2f", $1} else {printf "%8.0f", $1} }'
+		$perf_ipc && case $c in
+			cycles) cycles=$val;;
+			instructions) echo $cycles $val|awk '{printf "%8.2f", $2 / $1}';;
+			*) ;;
+		esac
+	done | ($PERCENT && awk '{printf "%8.0f%8.0f%8.2f%8.2f%8.2f%8.2f%8.2f%8.2f%8.0f%8.2f", $1, $2, $3, 100*$4/$9, 100*$5/$9, 100*$6/$9, 100*$7/$9, 100*$8/$9, $9, 100*($4+$5+$6+$7+$8)/$9}' || cat)
 }
 
 case $OUTPUT in
