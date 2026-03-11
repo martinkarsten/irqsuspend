@@ -61,11 +61,11 @@ function sartrace_run() {
 	ssh -f $SERVER "sleep $1; taskset -c $observer $SAR -P $allcpuset -u ALL 1 $2" > $SAR-$file.out
 }
 
-function tcptrace_start() {
+function tcpcount_start() {
 	pdsh -w $DRIVER,$CLIENTS ./tcp.sh >/dev/null
 }
 
-function tcptrace_stop() {
+function tcpcount_stop() {
 	pdsh -w $DRIVER,$CLIENTS ./tcp.sh | sort | tee tcp-$file.out
 }
 
@@ -91,11 +91,11 @@ function polltrace_stop() {
   ssh $SERVER sudo sh -c "'echo \!hist:key=common_pid.execname,ret > /sys/kernel/debug/tracing/events/syscalls/sys_exit_epoll_wait/trigger'"
 }
 
-function irqtrace_start() {
+function irqcount_start() {
 	ssh $SERVER ./irq.sh $IFACE count > /dev/null
 }
 
-function irqtrace_stop() {
+function irqcount_stop() {
 	ssh $SERVER ./irq.sh $IFACE count | tee irq-$file.out
 }
 

@@ -1,12 +1,18 @@
 SERVER=$1
 MEMCACHED="work/memcached/memcached"; MUTILATE="./mutilate"; PERF="/usr/local/perf/bin/perf"; FGDIR="~/work/FlameGraph"
 NDCLI="linux/net-next/tools/net/ynl/pyynl/cli.py --no-schema --output-json --spec linux/net-next/Documentation/netlink/specs/netdev.yaml"
+MEMKEYS=1000000
+TRACING=true
 case $SERVER in
 	red01|red01vm) # mlx4
 		COALESCEd=" on  na 16  44 na na 16  16 na 256 na  na" # default
 		COALESCEx="off  na  0  44 na na 16  16 na 256 na  na" # RX coalescing off
 		;;
-	tilly01|tilly01vm|node10) # mlx5
+	small) # mlx5
+		COALESCEd="off off  8 128 na na  8 128 na na off off" # DIM/CQE off
+		COALESCEx="off  on  0   1 na na  8 128 na na off off" # RX coalescing off
+		;;
+	tilly01|tilly01vm|tilly02|node10) # mlx5
 		COALESCEd=" on  on  8 128 na na  8 128 na na  on off" # default
 		COALESCEx="off  on  0   1 na na  8 128 na na off off" # RX coalescing off
 		;;
@@ -24,6 +30,11 @@ case $SERVER in
 		IFACE=enp7s0; SERVER_IP=10.10.0.1; DRIVER=red02; CLIENTS=red03,red04,red05,red06,red08,red09
 		BASECORE=0; MAXCORES=4; OTHER="5-6"; HTBASE=0; MUTCORES=12; QPS="100000 150000 200000"
 		;;
+	small)
+		SERVER=tilly01; MEMKEYS=100000; TRACING=false
+		IFACE=ens2f0np0; SERVER_IP=192.168.199.1; DRIVER=tilly02; CLIENTS=""
+		BASECORE=1; MAXCORES=2; OTHER="8-15"; HTBASE=16; MUTCORES=16; QPS="40000 80000 120000 160000"
+		;;
 	tilly01)
 		IFACE=ens2f0np0; SERVER_IP=192.168.199.1; DRIVER=tilly02; CLIENTS=tilly03,tilly04,tilly05,tilly06,tilly07,tilly08
 		BASECORE=0; MAXCORES=8; OTHER="8-15"; HTBASE=16; MUTCORES=16; QPS="200000 400000 600000"
@@ -32,10 +43,13 @@ case $SERVER in
 		IFACE=enp7s0; SERVER_IP=192.168.199.9; DRIVER=tilly02; CLIENTS=tilly03,tilly04,tilly05,tilly06,tilly07,tilly08
 		BASECORE=0; MAXCORES=8; OTHER="8-15"; HTBASE=0; MUTCORES=16; QPS="200000 400000 600000"
 		;;
+	tilly02)
+		IFACE=ens2np0; SERVER_IP=192.168.199.2; DRIVER=tilly01; CLIENTS=tilly03,tilly04,tilly05,tilly06,tilly07,tilly08
+		BASECORE=0; MAXCORES=8; OTHER="8-15"; HTBASE=16; MUTCORES=16; QPS="200000 400000 600000"
+		;;
 	node10)
 		IFACE=ens1np0; SERVER_IP=192.168.126.110; DRIVER=node01; CLIENTS=node03,node04,node05,node06,node07,node08
 		BASECORE=0; MAXCORES=8; OTHER="8-9"; HTBASE=10; MUTCORES=10; QPS="200000 400000 600000 800000 1000000"
-		MUTILATE="./mutilate"
 		;;
 	husky10)
 		IFACE=enp2s0f0np0; SERVER_IP=192.168.195.30; DRIVER=husky00; CLIENTS=husky02,husky04,husky06,husky07,husky09

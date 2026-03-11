@@ -63,7 +63,7 @@ COALESCEx="na na na na na na na na na na na na"
 # client & server settings based on server name
 [ $# -gt 0 ] || usage
 case $1 in
-red01|red01vm|tilly01|tilly01vm|node10|husky10)
+red01|red01vm|small|tilly01|tilly01vm|tilly02|node10|husky10)
 	hostfile=$(dirname $0)/hostspec.martin.sh;;
 *)
 	hostfile=$(dirname $0)/hostspec.$1.sh;;
@@ -90,12 +90,14 @@ echo "tests: $TESTCASES"
 echo "runs: $RUNS; rates: $QPS"
 echo "cores: $CORES; ht: $opt_ht; conns: $arg_conns; mutcores: $MUTCORES"
 
+[ -z "$CLIENTS" ] && allclients="$DRIVER" || allclients="$DRIVER,$CLIENTS"
+
 [ "$RUNS" = "show" ] && exit 0
 
 cleanup() {
-	pdsh -w $DRIVER,$CLIENTS killall -q -9 mutilate 2>/dev/null
+	pdsh -w $allclients killall -q -9 mutilate 2>/dev/null
 	ssh $SERVER killall -q -9 memcached 2>/dev/null
-	bpftrace_kill;
+	$TRACING && bpftrace_kill
 }
 
 check_last_file() {
@@ -104,8 +106,8 @@ check_last_file() {
 }
 
 # basic setup
-AGENTS=$(for m in $(echo $CLIENTS|tr , ' '); do echo -n " -a $m";done)
-MUTARGS="-s $SERVER_IP -K fb_key -V fb_value -i fb_ia -r 1000000"
+[ "$CLIENTS" ] && AGENTS=$(for m in $(echo $CLIENTS|tr , ' '); do echo -n " -a $m";done)
+MUTARGS="-s $SERVER_IP -K fb_key -V fb_value -i fb_ia -r $MEMKEYS"
 MUTILATE+=" -T $MUTCORES"
 
 # build kernel, if requested
@@ -121,7 +123,7 @@ dir=$(dirname $0)
 files=$(echo $dir/{irq,setup,util}.sh)
 [ -f $dir/servercfg/setup_$SERVER.sh ] && files+=" $dir/servercfg/setup_$SERVER.sh"
 scp $files $SERVER: >/dev/null 2>&1 &
-for h in $DRIVER $(echo $CLIENTS|tr , ' '); do scp $dir/tcp.sh $h: >/dev/null 2>&1 & done
+for h in $(echo $allclients|tr , ' '); do scp $dir/tcp.sh $h: >/dev/null 2>&1 & done
 wait
 
 trap "echo cleaning up; cleanup; wait; check_last_file" EXIT
@@ -195,35 +197,40 @@ for tc in $TESTCASES; do
 	printf "$MEMVAR taskset -c $runcpuset $MEMCACHED $MEMSPEC\n\n" > memcached-$file.out
 	printf "$MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t $arg_time\n\n" >> memcached-$file.out
 	printf "SERVER "; ssh -f $SERVER "$MEMVAR taskset -c $runcpuset $MEMCACHED $MEMSPEC"
-	printf "AGENTS "; pdsh -w $CLIENTS "ulimit -n 32768 && $MUTILATE -A" 2>/dev/null &
+	sleep 1
 	check_port 11211 $SERVER || echo "SERVER FAILED" | tee -a memcached-$file.out
-	check_port 5556 $CLIENTS || echo "AGENTS FAILED" | tee -a memcached-$file.out
+	[ "$CLIENTS" ] && {
+		printf "AGENTS "
+		pdsh -w $CLIENTS "ulimit -n 32768 && $MUTILATE -A" 2>/dev/null &
+		sleep 1
+		check_port 5556 $CLIENTS || echo "AGENTS FAILED" | tee -a memcached-$file.out
+	}
 	time3=$(expr $arg_time / 3)
 	to3=$(expr $time3 \* 3 / 2)s
 	printf "LOAD "; timeout $to3 ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS --loadonly" || echo "LOAD FAILED" >> memcached-$file.out
 	printf "WARM "; timeout $to3 ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t $time3" >/dev/null 2>&1 || echo "WARMUP FAILED" >> memcached-$file.out
-	case $opt_events in
+	$TRACING && case $opt_events in
 		mem)   perfmem_start $time3 $time3;;
 		flame) flamegraph_start $time3 $time3;;
 		*)     perfevent_run $time3 $time3;;
 	esac
-	sartrace_run $time3 $time3
-	tcptrace_start
-	bpftrace_start
-	polltrace_start
-	irqtrace_start
+	tcpcount_start
+	$TRACING && sartrace_run $time3 $time3
+	$TRACING && bpftrace_start
+	$TRACING && polltrace_start
+	irqcount_start
 	to=$(expr $arg_time \* 3 / 2)s
 	printf "RUN\n"; timeout $to ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t $arg_time" | tee mutilate-$file.out # experiment
-	irqtrace_stop
-	polltrace_stop
-	bpftrace_stop
-	tcptrace_stop
-	memcached_stats
-	pdsh -w $DRIVER,$CLIENTS killall -q mutilate
+	irqcount_stop
+	$TRACING && polltrace_stop
+	$TRACING && bpftrace_stop
+	$TRACING && memcached_stats
+	tcpcount_stop
+	pdsh -w $allclients killall -q mutilate
 	ssh $SERVER killall -q memcached
 	kill -9 $(jobs -p) 2>/dev/null
 	ssh $SERVER killall -q -9 memcached
-	case $opt_events in
+	$TRACING && case $opt_events in
 		mem)   perfmem_stop;;
 		flame) flamegraph_stop;;
 	esac

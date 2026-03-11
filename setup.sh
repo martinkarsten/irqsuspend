@@ -58,15 +58,9 @@ sudo sysctl -w net.ipv4.tcp_max_syn_backlog=32768
 sudo sysctl -w net.core.somaxconn=32768
 
 [ -d /sys/devices/system/cpu/intel_pstate ] && {
-	[ "$1" = "turbo" ] && {
-		sudo sh -c "echo  34 > /sys/devices/system/cpu/intel_pstate/min_perf_pct"
-		sudo sh -c "echo 100 > /sys/devices/system/cpu/intel_pstate/max_perf_pct"
-		sudo sh -c "echo   0 > /sys/devices/system/cpu/intel_pstate/no_turbo"
-	} || {
-		sudo sh -c "echo 100 > /sys/devices/system/cpu/intel_pstate/min_perf_pct"
-		sudo sh -c "echo 100 > /sys/devices/system/cpu/intel_pstate/max_perf_pct"
-		sudo sh -c "echo   1 > /sys/devices/system/cpu/intel_pstate/no_turbo"
-	}
+	sudo sh -c "echo 100 > /sys/devices/system/cpu/intel_pstate/min_perf_pct"
+	sudo sh -c "echo 100 > /sys/devices/system/cpu/intel_pstate/max_perf_pct"
+	sudo sh -c "echo   1 > /sys/devices/system/cpu/intel_pstate/no_turbo"
 } || {
 	echo
 	echo WARNING: intel_pstate not found
