@@ -11,7 +11,7 @@ function usage() {
   echo "-h                 hyperthread mode"
   echo "-n num             connections per mutilate thread"
   echo "-m num             number of mutilate threads per client"
-  echo "-p ev1,ev2,...     perf event set (or flame, mem)"
+  echo "-p ev1,ev2,...     perf event set"
   echo "-q qps1,qps2,...   load rates"
   echo "-s                 set skip flag (-S) in mutilate"
   echo "-t test1,test2,... test cases"
@@ -55,10 +55,6 @@ case $option in
 	*) usage;;
 esac; done
 shift $(($OPTIND - 1))
-
-# set a default
-COALESCEd="na na na na na na na na na na na na"
-COALESCEx="na na na na na na na na na na na na"
 
 # client & server settings based on server name
 [ $# -gt 0 ] || usage
@@ -108,7 +104,6 @@ check_last_file() {
 # basic setup
 [ "$CLIENTS" ] && AGENTS=$(for m in $(echo $CLIENTS|tr , ' '); do echo -n " -a $m";done)
 MUTARGS="-s $SERVER_IP -K fb_key -V fb_value -i fb_ia -r $MEMKEYS"
-MUTILATE+=" -T $MUTCORES"
 
 # build kernel, if requested
 $opt_build && {
@@ -135,6 +130,11 @@ echo "cleaning up"; cleanup
 ssh $SERVER ./setup.sh
 ssh $SERVER ./setup.sh -c $BASECORE-$(($BASECORE + $MAXCORES - 1))
 ssh $SERVER ./irq.sh $IFACE clean
+
+time3=$(expr $arg_time / 3)
+time4=$(expr $arg_time / 4)
+time5=$(expr $arg_time / 5)
+Time2=$(expr $arg_time \* 2)s
 
 # loop over test cases
 for ((run=0;run<$RUNS;run++)); do
@@ -172,13 +172,11 @@ for tc in $TESTCASES; do
 			runcpuset=$base1-$top1
 			irqcpuset=$base2-$top2
 			allcpuset=$runcpuset,$irqcpuset
-			observer=$cpus
 			irqs=$cpus
 		} || {
 			runcpuset=$base1-$top1,$base2-$top2
 			irqcpuset=$runcpuset
 			allcpuset=$runcpuset
-			observer=$(($cpus / 2))
 			irqs=$cpus
 		}
 	} || {
@@ -187,7 +185,6 @@ for tc in $TESTCASES; do
 		runcpuset=$base-$top
 		irqcpuset=$runcpuset
 		allcpuset=$runcpuset
-		observer=$cpus
 		irqs=$cpus
 	}
 	MEMSPEC="-t $cpus -N $cpus -b 32768 -c 32768 -m 10240 -o hashpower=24,no_lru_maintainer,no_lru_crawler"
@@ -195,45 +192,38 @@ for tc in $TESTCASES; do
 	eval COALESCING=\$COALESCE$CL
 	ssh $SERVER NDCLI=\"$NDCLI\" ./irq.sh -p $IFACE setq $irqs setirqN $OTHER 0 0 setirq1 $irqcpuset 0 $irqs setcoalesce $COALESCING setpoll $POLLVAR show > setup-$file.out
 	printf "$MEMVAR taskset -c $runcpuset $MEMCACHED $MEMSPEC\n\n" > memcached-$file.out
-	printf "$MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t $arg_time\n\n" >> memcached-$file.out
+	printf "$MUTILATE -T $MUTCORES $AGENTS $MUTARGS $MUTSPEC --noload -t $arg_time\n\n" >> memcached-$file.out
 	printf "SERVER "; ssh -f $SERVER "$MEMVAR taskset -c $runcpuset $MEMCACHED $MEMSPEC"
 	sleep 1
 	check_port 11211 $SERVER || echo "SERVER FAILED" | tee -a memcached-$file.out
 	[ "$CLIENTS" ] && {
 		printf "AGENTS "
-		pdsh -w $CLIENTS "ulimit -n 32768 && $MUTILATE -A" 2>/dev/null &
+		pdsh -w $CLIENTS "ulimit -n 32768 && $MUTILATE -A -T $MUTCORES" 2>/dev/null &
 		sleep 1
 		check_port 5556 $CLIENTS || echo "AGENTS FAILED" | tee -a memcached-$file.out
 	}
-	time3=$(expr $arg_time / 3)
-	to3=$(expr $time3 \* 3 / 2)s
-	printf "LOAD "; timeout $to3 ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS --loadonly" || echo "LOAD FAILED" >> memcached-$file.out
-	printf "WARM "; timeout $to3 ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t $time3" >/dev/null 2>&1 || echo "WARMUP FAILED" >> memcached-$file.out
-	$TRACING && case $opt_events in
-		mem)   perfmem_start $time3 $time3;;
-		flame) flamegraph_start $time3 $time3;;
-		*)     perfevent_run $time3 $time3;;
-	esac
+	printf "LOAD "; timeout 10s ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS --loadonly" || echo "LOAD FAILED" >> memcached-$file.out
+	printf "WARM "; timeout 10s ssh $DRIVER "ulimit -n 32768 && $MUTILATE -T $MUTCORES $AGENTS $MUTARGS $MUTSPEC --noload -t 5" >/dev/null 2>&1 || echo "WARMUP FAILED" >> memcached-$file.out
+#	ssh $SERVER "sudo sh -c \"echo $file > /dev/kmsg\""
+	$TRACING && perf_start $OTHER $opt_events $time4 $time4 $time4 0
+	$TRACING && sartrace_run $OTHER $time3 $time3
 	tcpcount_start
-	$TRACING && sartrace_run $time3 $time3
 	$TRACING && bpftrace_start
 	$TRACING && polltrace_start
 	irqcount_start
-	to=$(expr $arg_time \* 3 / 2)s
-	printf "RUN\n"; timeout $to ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t $arg_time" | tee mutilate-$file.out # experiment
+	printf "RUN\n"; timeout $Time2 ssh $DRIVER "ulimit -n 32768 && $MUTILATE -T $MUTCORES $AGENTS $MUTARGS $MUTSPEC --noload -t $arg_time" | tee mutilate-$file.out # experiment
 	irqcount_stop
 	$TRACING && polltrace_stop
 	$TRACING && bpftrace_stop
-	$TRACING && memcached_stats
 	tcpcount_stop
+	$TRACING && memcached_stats
 	pdsh -w $allclients killall -q mutilate
 	ssh $SERVER killall -q memcached
+	sleep 1
 	kill -9 $(jobs -p) 2>/dev/null
-	ssh $SERVER killall -q -9 memcached
-	$TRACING && case $opt_events in
-		mem)   perfmem_stop;;
-		flame) flamegraph_stop;;
-	esac
+	ssh $SERVER killall -q -9 memcached 2>/dev/null
+	$TRACING && perf_stop $time4 0
+#	ssh $SERVER "sudo dmesg -T|tail -5" > dmesg-$file.out
 done; done; done
 
 exit 0

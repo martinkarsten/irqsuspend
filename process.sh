@@ -74,7 +74,7 @@ function print_headers {
 	printf "%8s%8s%8s%8s%8s%8s" qps avglat 95%lat 99%lat cpu ppi
 	[ -z "$pcounters" ] || for c in $pcounters; do
 		printf "%8s" ${perf_labels["$c"]}
-		$perf_ipc && [[ $c == "instructions" ]] && printf "     ipc"
+		$perf_ipc && [[ $c == "instructions" ]] && printf "%8s" ipc
 	done
 	echo
 }
@@ -85,12 +85,12 @@ function print_perf_perq {
 		val=X
 		ls perf-$q-$t-*.out >/dev/null 2>&1 && val=$(for f in perf-$q-$t-*.out; do
 			tim=$(grep -F elapsed $f|awk '{print $1}')
-			grep -F $c $f|awk  -v tim=$tim -v wrk=$wrk '{if (tim * wrk > 0) printf "%f", $1 / (tim * wrk); else printf X}'
+			grep -F $c $f|awk -v tim=$tim -v wrk=$wrk '{if (tim * wrk > 0) printf "%f", $1 / (tim * wrk); else printf X}'
 		done|$(dirname $0)/avg.sh 1|cut -f2 -d' ')
 		echo $val | awk '{if ($1 < 100) {printf "%8.2f", $1} else {printf "%8.0f", $1} }'
 		$perf_ipc && case $c in
 			cycles) cycles=$val;;
-			instructions) echo $cycles $val|awk '{printf "%8.2f", $2 / $1}';;
+			instructions) [ "$cycles" != "X" ] && echo $cycles $val|awk '{if ($1 > 0) printf "%8.2f", $2 / $1; else printf "%8s", X}' || printf "%8s" X;;
 			*) ;;
 		esac
 	done | ($PERCENT && awk '{printf "%8.0f%8.0f%8.2f%8.2f%8.2f%8.2f%8.2f%8.2f%8.0f%8.2f", $1, $2, $3, 100*$4/$9, 100*$5/$9, 100*$6/$9, 100*$7/$9, 100*$8/$9, $9, 100*($4+$5+$6+$7+$8)/$9}' || cat)

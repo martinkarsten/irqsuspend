@@ -20,6 +20,12 @@ function DEBUG() {
 	return
 }
 
+# https://stackoverflow.com/a/76512982
+function decolor() {
+	sed -i -E "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})*)?[m,K,H,f,J]//gm" $1
+	sed -i -E "s/\x1B\([A-Z]{1}(\x1B\[[m,K,H,f,J])?//gm" $1
+}
+
 function show_cases() {
 	case_start=$(grep -Fn "$1 case_start" $2|tail -1|cut -f1 -d:)
 	case_end=$(grep -Fn "$1 esac_end" $2|tail -1|cut -f1 -d:)
@@ -35,30 +41,26 @@ function check_port() {
 	timeout 30s pdsh -w $* "while ! $SOCAT /dev/null TCP:localhost:$port 2>/dev/null; do sleep 1; done"
 }
 
-function perfmem_start() {
-	ssh -f $SERVER "sleep $1; taskset -c $observer $PERF mem record -C $allcpuset -F 99 -o perf.data -- sleep $2"
+function perf_start() {
+	ssh -f $SERVER "sleep $3; taskset -c $1 $PERF stat -C $allcpuset -e $2 --no-big-num -- sleep $4 2>&1; \
+	          [ $5 -gt 0 ] && taskset -c $1 $PERF mem record -C $allcpuset -F max -o perf.mem.data --ldlat 0 -- sleep $5 2>/dev/null; \
+	          [ $6 -gt 0 ] && taskset -c $1 $PERF record  -g -C $allcpuset -F max -o perf.data -- sleep $6 2>/dev/null" > perf-$file.out
 }
 
-function perfmem_stop() {
-	ssh -f $SERVER "unset PAGER; $PERF mem report --sort=mem --stdio -i perf.data" > perfmem-$file.out
-}
-
-function flamegraph_start() {
-	ssh -f $SERVER "sleep $1; taskset -c $observer $PERF record -C $allcpuset -F 99 -g -o perf.data -- sleep $2 >/dev/null"
-}
-
-function flamegraph_stop() {
-	# need ssh -t here, otherwise 'perf script' assumes that stdin is a file and won't run
-	ssh -t $SERVER "$PERF script >out.perf && $FGDIR/stackcollapse-perf.pl out.perf >out.folded && $FGDIR/flamegraph.pl out.folded >flamegraph.svg"
-	scp $SERVER:flamegraph.svg flamegraph-$file.svg && ssh $SERVER "rm -f perf.data out.perf out.folded flamegraph.svg"
-}
-
-function perfevent_run() {
-	ssh -f $SERVER "sleep $1; taskset -c $observer $PERF stat -C $allcpuset -e $opt_events --no-big-num -- sleep $2 2>&1" > perf-$file.out
+function perf_stop() {
+	[ $1 -gt 0 ] && {
+		ssh -t $SERVER "$PERF mem report --sort=mem --stdio -i perf.mem.data" > perfmem-$file.out && decolor perfmem-$file.out
+		ssh $SERVER "rm -f perf.mem.data"
+	}
+	[ $2 -gt 0 ] && {
+		ssh -t $SERVER "$PERF script >out.perf && $FGDIR/stackcollapse-perf.pl out.perf >out.folded && $FGDIR/flamegraph.pl out.folded >flamegraph.svg"
+		scp $SERVER:flamegraph.svg flamegraph-$file.svg
+		ssh $SERVER "rm -f perf.data out.perf out.folded flamegraph.svg"
+	}
 }
 
 function sartrace_run() {
-	ssh -f $SERVER "sleep $1; taskset -c $observer $SAR -P $allcpuset -u ALL 1 $2" > $SAR-$file.out
+	ssh -f $SERVER "sleep $2; taskset -c $1 $SAR -P $allcpuset -u ALL 1 $3" > $SAR-$file.out
 }
 
 function tcpcount_start() {
@@ -66,7 +68,7 @@ function tcpcount_start() {
 }
 
 function tcpcount_stop() {
-	pdsh -w $DRIVER,$CLIENTS ./tcp.sh | sort | tee tcp-$file.out
+	pdsh -w $DRIVER,$CLIENTS ./tcp.sh | sort > tcp-$file.out
 }
 
 function bpftrace_start() {
@@ -96,7 +98,7 @@ function irqcount_start() {
 }
 
 function irqcount_stop() {
-	ssh $SERVER ./irq.sh $IFACE count | tee irq-$file.out
+	ssh $SERVER ./irq.sh $IFACE count > irq-$file.out
 }
 
 function memcached_stats() {

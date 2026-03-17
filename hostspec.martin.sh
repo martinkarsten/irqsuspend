@@ -1,8 +1,13 @@
 SERVER=$1
-MEMCACHED="work/memcached/memcached"; MUTILATE="./mutilate"; PERF="/usr/local/perf/bin/perf"; FGDIR="~/work/FlameGraph"
+MEMCACHED="work/memcached/memcached"
+MUTILATE="./mutilate"
+PERF="/usr/local/perf/bin/perf"
+FGDIR="~/work/FlameGraph"
 NDCLI="linux/net-next/tools/net/ynl/pyynl/cli.py --no-schema --output-json --spec linux/net-next/Documentation/netlink/specs/netdev.yaml"
 MEMKEYS=1000000
 TRACING=true
+COALESCEd="na na na na na na na na na na na na"
+COALESCEx="na na na na na na na na na na na na"
 case $SERVER in
 	red01|red01vm) # mlx4
 		COALESCEd=" on  na 16  44 na na 16  16 na 256 na  na" # default
@@ -52,8 +57,9 @@ case $SERVER in
 		BASECORE=0; MAXCORES=8; OTHER="8-9"; HTBASE=10; MUTCORES=10; QPS="200000 400000 600000 800000 1000000"
 		;;
 	husky10)
+		PERF="perf"
 		IFACE=enp2s0f0np0; SERVER_IP=192.168.195.30; DRIVER=husky00; CLIENTS=husky02,husky04,husky06,husky07,husky09
-		BASECORE=0; MAXCORES=8; OTHER="8-15"; HTBASE=0; MUTCORES=16; QPS="200000 400000 600000"
+		BASECORE=0; MAXCORES=8; OTHER="8-15"; HTBASE=0; MUTCORES=16; QPS="150000 300000 450000"
 		;;
 	*)
 		echo unknown server $SERVER; exit 1;;
