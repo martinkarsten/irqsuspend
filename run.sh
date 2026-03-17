@@ -136,6 +136,10 @@ ssh $SERVER ./setup.sh
 ssh $SERVER ./setup.sh -c $BASECORE-$(($BASECORE + $MAXCORES - 1))
 ssh $SERVER ./irq.sh $IFACE clean
 
+time3=$(expr $arg_time / 3)
+timeout3=$(expr $time3 \* 3 / 2)s
+timeout=$(expr $arg_time \* 3 / 2)s
+
 # loop over test cases
 for ((run=0;run<$RUNS;run++)); do
 [ -f runs ] && [ $run -ge $(cat runs) ] && exit 0
@@ -205,10 +209,9 @@ for tc in $TESTCASES; do
 		sleep 1
 		check_port 5556 $CLIENTS || echo "AGENTS FAILED" | tee -a memcached-$file.out
 	}
-	time3=$(expr $arg_time / 3)
-	to3=$(expr $time3 \* 3 / 2)s
-	printf "LOAD "; timeout $to3 ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS --loadonly" || echo "LOAD FAILED" >> memcached-$file.out
-	printf "WARM "; timeout $to3 ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t $time3" >/dev/null 2>&1 || echo "WARMUP FAILED" >> memcached-$file.out
+	printf "LOAD "; timeout $timeout3 ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS --loadonly" || echo "LOAD FAILED" >> memcached-$file.out
+	printf "WARM "; timeout $timeout3 ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t $time3" >/dev/null 2>&1 || echo "WARMUP FAILED" >> memcached-$file.out
+	ssh $SERVER "sudo sh -c \"echo $file > /dev/kmsg\""
 	$TRACING && case $opt_events in
 		mem)   perfmem_start $time3 $time3;;
 		flame) flamegraph_start $time3 $time3;;
@@ -218,13 +221,15 @@ for tc in $TESTCASES; do
 	$TRACING && sartrace_run $time3 $time3
 	$TRACING && bpftrace_start
 	$TRACING && polltrace_start
+#	ssh -f $SERVER "sudo ./mlnx-tools/python/mlnx_perf -i ens2f0np0 -t 1 > mlnx_perf-$file.out"
 	irqcount_start
-	to=$(expr $arg_time \* 3 / 2)s
-	printf "RUN\n"; timeout $to ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t $arg_time" | tee mutilate-$file.out # experiment
+	printf "RUN\n"; timeout $timeout ssh $DRIVER "ulimit -n 32768 && $MUTILATE $MUTARGS $MUTSPEC $AGENTS --noload -t $arg_time" | tee mutilate-$file.out # experiment
 	irqcount_stop
 	$TRACING && polltrace_stop
 	$TRACING && bpftrace_stop
 	$TRACING && memcached_stats
+#	ssh $SERVER sudo killall -q mlnx_perf
+#	scp $SERVER:mlnx_perf-$file.out .
 	tcpcount_stop
 	pdsh -w $allclients killall -q mutilate
 	ssh $SERVER killall -q memcached
@@ -234,6 +239,7 @@ for tc in $TESTCASES; do
 		mem)   perfmem_stop;;
 		flame) flamegraph_stop;;
 	esac
+	ssh $SERVER "sudo dmesg -T|tail -5" > dmesg-$file.out
 done; done; done
 
 exit 0
